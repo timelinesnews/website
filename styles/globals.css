@@ -1,0 +1,132 @@
+/* ------------------------------------------------------
+   GLOBAL CSS FOR TIMELINES WEBSITE
+   Clean, Modern, Smooth UI
+------------------------------------------------------- */
+
+/* Default Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Global Font & Background */
+body {
+  font-family: "Poppins", sans-serif;
+  background-color: #f5f6f8;
+  color: #111827;
+  line-height: 1.5;
+}
+
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Remove Input Highlight on Mobile */
+input,
+textarea,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Hide scrollbars (clean UI) */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c7c7c7;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Selection Color */
+::selection {
+  background: #4f46e5;
+  color: #fff;
+}
+
+/* -----------------------------
+   NAVBAR RESPONSIVE FIX
+------------------------------ */
+.desktop {
+  display: flex;
+}
+
+@media (max-width: 768px) {
+  .desktop {
+    display: none !important;
+  }
+}
+.mobile-btn {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-btn {
+    display: block !important;
+  }
+}
+
+/* -----------------------------
+   ANIMATIONS
+------------------------------ */
+
+/* Fade-in */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out forwards;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scale Hover (for cards, buttons) */
+.scale-hover {
+  transition: 0.2s ease;
+}
+.scale-hover:hover {
+  transform: scale(1.03);
+}
+
+/* -----------------------------
+   SHARED UI ELEMENTS
+------------------------------ */
+
+/* Card UI */
+.card {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(17, 17, 17, 0.05);
+}
+
+/* Button Reset */
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Inputs */
+input, textarea {
+  font-family: inherit;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  padding: 10px 14px;
+  outline: none;
+}
+input:focus, textarea:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+}
+
+/* Images smooth */
+img {
+  image-rendering: -webkit-optimize-contrast;
+  max-width: 100%;
+  display: block;
+}
