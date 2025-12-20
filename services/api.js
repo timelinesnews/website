@@ -41,16 +41,28 @@ export const getAdminToken = () => {
 };
 
 /* ======================================================
-   🔐 AUTO ATTACH TOKEN
+   🛡 HARD BLOCK: NEVER ALLOW /undefined REQUESTS
 ====================================================== */
 instance.interceptors.request.use(
   (config) => {
+    if (config?.url?.includes("undefined")) {
+      console.error(
+        "🚨 BLOCKED API REQUEST WITH UNDEFINED:",
+        config.method?.toUpperCase(),
+        config.url
+      );
+      return Promise.reject(
+        new Error("Blocked request with undefined id")
+      );
+    }
+
     if (typeof window !== "undefined") {
       const admin = getAdminToken();
       const user = getAuthToken();
 
       if (admin) config.headers.Authorization = `Bearer ${admin}`;
-      else if (user) config.headers.Authorization = `Bearer ${user}`;
+      else if (user)
+        config.headers.Authorization = `Bearer ${user}`;
     }
     return config;
   },
@@ -61,9 +73,6 @@ instance.interceptors.request.use(
    🛡 RESPONSE HELPERS
 ====================================================== */
 const safe = (res) => res?.data ?? null;
-
-const normalize = (data) =>
-  data?.news || data?.data || data || null;
 
 const errOut = (err) => {
   if (err?.response?.data) return err.response.data;
@@ -127,9 +136,32 @@ export const api = {
   getProfile: async () => {
     try {
       const res = await instance.get("/auth/me");
-      return normalize(safe(res));
+      return safe(res);
     } catch {
       return null;
+    }
+  },
+
+  updateProfile: async (formData) => {
+    try {
+      const res = await instance.put("/auth/update", formData, {
+        headers:
+          formData instanceof FormData
+            ? { "Content-Type": "multipart/form-data" }
+            : {},
+      });
+      return safe(res);
+    } catch (err) {
+      return { error: errOut(err) };
+    }
+  },
+
+  updatePaymentMethod: async (payload) => {
+    try {
+      const res = await instance.put("/auth/payment-method", payload);
+      return safe(res);
+    } catch (err) {
+      return { error: errOut(err) };
     }
   },
 
@@ -174,8 +206,7 @@ export const api = {
   getNews: async (params = {}) => {
     try {
       const res = await instance.get("/news", { params });
-      const data = normalize(safe(res));
-      return Array.isArray(data) ? data : [];
+      return safe(res)?.data ?? [];
     } catch {
       return [];
     }
@@ -183,20 +214,18 @@ export const api = {
 
   getNewsById: async (id) => {
     if (!id) {
-      console.warn("🚫 getNewsById called with invalid id:", id);
+      console.warn("🚫 getNewsById blocked (invalid id):", id);
       return null;
     }
-
     try {
       const res = await instance.get(`/news/${id}`);
-      return normalize(safe(res));
+      return safe(res)?.data ?? null;
     } catch {
       return null;
     }
   },
 
   createNews: async (formData) => {
-    if (!formData) return { error: "Missing data" };
     try {
       const token = getAuthToken();
       const res = await fetch(`${BASE_URL}/news`, {
@@ -230,6 +259,32 @@ export const api = {
     }
   },
 
+  likeNews: async (id) => {
+    if (!id) {
+      console.warn("🚫 likeNews blocked (invalid id):", id);
+      return null;
+    }
+    try {
+      const res = await instance.post(`/news/${id}/like`);
+      return safe(res);
+    } catch {
+      return null;
+    }
+  },
+
+  incrementView: async (id) => {
+    if (!id) {
+      console.warn("🚫 incrementView blocked (invalid id):", id);
+      return null;
+    }
+    try {
+      const res = await instance.post(`/news/${id}/view`);
+      return safe(res);
+    } catch {
+      return null;
+    }
+  },
+
   /* ============================
        💬 COMMENTS
   ============================ */
@@ -254,7 +309,8 @@ export const api = {
   },
 
   deleteComment: async (newsId, commentId) => {
-    if (!newsId || !commentId) return { error: "Invalid comment" };
+    if (!newsId || !commentId)
+      return { error: "Invalid comment" };
     try {
       const res = await instance.delete(
         `/news/${newsId}/comment/${commentId}`
@@ -265,6 +321,9 @@ export const api = {
     }
   },
 
+  /* ============================
+       🔧 UTILS
+  ============================ */
   getBaseUrl: () => BASE_URL,
 };
 
