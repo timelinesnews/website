@@ -16,7 +16,7 @@ export default function NewsCard({ item }) {
     return null;
   }
 
-  const newsId = String(rawId);
+  const newsId = String(rawId).trim();
 
   /* ======================================================
      IMAGE HANDLER
@@ -26,6 +26,8 @@ export default function NewsCard({ item }) {
     if (url.startsWith("http")) return url;
     return `${BACKEND}/${url.replace(/^\/+/, "")}`;
   };
+
+  const imageUrl = item.image || item.photoUrl;
 
   /* ======================================================
      LOCATION TEXT
@@ -66,45 +68,43 @@ export default function NewsCard({ item }) {
      UI
   ====================================================== */
   return (
-    <Link
-      href={`/news/${newsId}`}
-      prefetch={false}               // 🔥 prevents bad prefetch
-      style={styles.card}
-    >
-      {/* IMAGE */}
-      <img
-        src={fixImage(item.image)}
-        alt={item.headline || "News image"}
-        loading="lazy"
-        style={styles.img}
-        onError={(e) => {
-          e.currentTarget.src = "/placeholder.jpg";
-        }}
-      />
+    <Link href={`/news/${newsId}`} legacyBehavior prefetch={false}>
+      <a style={styles.card}>
+        {/* IMAGE */}
+        <img
+          src={fixImage(imageUrl)}
+          alt={item.headline || "News image"}
+          loading="lazy"
+          style={styles.img}
+          onError={(e) => {
+            e.currentTarget.src = "/placeholder.jpg";
+          }}
+        />
 
-      {/* CONTENT */}
-      <div style={styles.content}>
-        {item.category && (
-          <span style={styles.category}>{item.category}</span>
-        )}
+        {/* CONTENT */}
+        <div style={styles.content}>
+          {item.category && (
+            <span style={styles.category}>{item.category}</span>
+          )}
 
-        <h3 style={styles.headline}>
-          {item.headline || "Untitled news"}
-        </h3>
+          <h3 style={styles.headline}>
+            {item.headline || "Untitled news"}
+          </h3>
 
-        {locationText && (
-          <div style={styles.locationBadge}>
-            📍 {locationText}
+          {locationText && (
+            <div style={styles.locationBadge}>
+              📍 {locationText}
+            </div>
+          )}
+
+          {excerpt && <p style={styles.desc}>{excerpt}</p>}
+
+          <div style={styles.metaRow}>
+            <span>📅 {dateText}</span>
+            <span>👁 {item.views ?? 0}</span>
           </div>
-        )}
-
-        {excerpt && <p style={styles.desc}>{excerpt}</p>}
-
-        <div style={styles.metaRow}>
-          <span>📅 {dateText}</span>
-          <span>👁 {item.views ?? 0}</span>
         </div>
-      </div>
+      </a>
     </Link>
   );
 }
