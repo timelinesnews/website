@@ -31,19 +31,61 @@ export default function NewsList({
   }
 
   /* =============================
-        HARD FILTER (🔥 REAL FIX)
-        allow _id OR id only
+        🔥 HARD NORMALIZATION
+        (THIS WAS MISSING)
   ============================= */
-  const safeNews = news.filter((item) => {
-    const id = item?._id || item?.id;
-    if (!id) {
-      console.warn("🚫 Dropped news without id:", item);
-      return false;
-    }
-    return true;
-  });
+  const normalizedNews = news
+    .map((item) => {
+      const realId =
+        item?._id ||
+        item?.id ||
+        item?.newsId ||
+        item?.news?._id;
 
-  if (safeNews.length === 0) {
+      if (!realId) {
+        console.warn("🚫 Dropped news without resolvable id:", item);
+        return null;
+      }
+
+      return {
+        // prefer nested news object if exists
+        ...(item.news || item),
+
+        // force correct id
+        _id: String(realId),
+
+        // normalize common fields
+        image:
+          item.image ||
+          item.photoUrl ||
+          item.news?.image ||
+          item.news?.photoUrl,
+
+        content:
+          item.content ||
+          item.news?.content,
+
+        location:
+          item.location ||
+          item.news?.location,
+
+        category:
+          item.category ||
+          item.news?.category,
+
+        createdAt:
+          item.createdAt ||
+          item.news?.createdAt,
+
+        views:
+          item.views ??
+          item.news?.views ??
+          0,
+      };
+    })
+    .filter(Boolean);
+
+  if (normalizedNews.length === 0) {
     return (
       <div style={styles.empty}>
         No valid news available.
@@ -56,19 +98,12 @@ export default function NewsList({
   ============================= */
   return (
     <div style={styles.list}>
-      {safeNews.map((item) => {
-        const key = String(item._id || item.id);
-
-        return (
-          <NewsCard
-            key={key}
-            item={{
-              ...item,
-              _id: item._id || item.id, // 🔥 normalize once
-            }}
-          />
-        );
-      })}
+      {normalizedNews.map((item) => (
+        <NewsCard
+          key={item._id}
+          item={item}
+        />
+      ))}
     </div>
   );
 }
