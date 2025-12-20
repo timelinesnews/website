@@ -1,4 +1,3 @@
-// services/api.js
 import axios from "axios";
 
 /* ======================================================
@@ -50,11 +49,8 @@ instance.interceptors.request.use(
       const admin = getAdminToken();
       const user = getAuthToken();
 
-      if (admin) {
-        config.headers.Authorization = `Bearer ${admin}`;
-      } else if (user) {
-        config.headers.Authorization = `Bearer ${user}`;
-      }
+      if (admin) config.headers.Authorization = `Bearer ${admin}`;
+      else if (user) config.headers.Authorization = `Bearer ${user}`;
     }
     return config;
   },
@@ -65,6 +61,9 @@ instance.interceptors.request.use(
    🛡 RESPONSE HELPERS
 ====================================================== */
 const safe = (res) => res?.data ?? null;
+
+const normalize = (data) =>
+  data?.news || data?.data || data || null;
 
 const errOut = (err) => {
   if (err?.response?.data) return err.response.data;
@@ -79,6 +78,7 @@ export const api = {
        🔥 FIREBASE AUTH
   ============================ */
   firebaseLogin: async (idToken) => {
+    if (!idToken) return { error: "Missing token" };
     try {
       const res = await instance.post("/auth/firebase-login", { idToken });
       return safe(res);
@@ -122,49 +122,14 @@ export const api = {
   },
 
   /* ============================
-       🔍 USERNAME CHECK
-  ============================ */
-  checkUsername: async (username) => {
-    try {
-      const res = await instance.get(`/auth/check-username/${username}`);
-      return safe(res);
-    } catch {
-      return false;
-    }
-  },
-
-  /* ============================
        👤 PROFILE
   ============================ */
   getProfile: async () => {
     try {
       const res = await instance.get("/auth/me");
-      return safe(res);
+      return normalize(safe(res));
     } catch {
       return null;
-    }
-  },
-
-  updateProfile: async (formData) => {
-    try {
-      const res = await instance.put("/auth/update", formData, {
-        headers:
-          formData instanceof FormData
-            ? { "Content-Type": "multipart/form-data" }
-            : {},
-      });
-      return safe(res);
-    } catch (err) {
-      return { error: errOut(err) };
-    }
-  },
-
-  updatePaymentMethod: async (payload) => {
-    try {
-      const res = await instance.put("/auth/payment-method", payload);
-      return safe(res);
-    } catch (err) {
-      return { error: errOut(err) };
     }
   },
 
@@ -172,6 +137,7 @@ export const api = {
        🌍 LOCATION
   ============================ */
   getStates: async (countryCode) => {
+    if (!countryCode) return [];
     try {
       const res = await instance.get(`/locations/states/${countryCode}`);
       return safe(res)?.data ?? [];
@@ -181,6 +147,7 @@ export const api = {
   },
 
   getCities: async (countryCode, stateCode) => {
+    if (!countryCode || !stateCode) return [];
     try {
       const res = await instance.get(
         `/locations/cities/${countryCode}/${stateCode}`
@@ -192,6 +159,7 @@ export const api = {
   },
 
   getVillages: async (params) => {
+    if (!params) return [];
     try {
       const res = await instance.get(`/locations/villages`, { params });
       return safe(res)?.data ?? [];
@@ -206,36 +174,36 @@ export const api = {
   getNews: async (params = {}) => {
     try {
       const res = await instance.get("/news", { params });
-      return safe(res)?.data ?? [];
+      const data = normalize(safe(res));
+      return Array.isArray(data) ? data : [];
     } catch {
       return [];
     }
   },
 
   getNewsById: async (id) => {
+    if (!id) {
+      console.warn("🚫 getNewsById called with invalid id:", id);
+      return null;
+    }
+
     try {
       const res = await instance.get(`/news/${id}`);
-      return safe(res)?.data ?? null;
+      return normalize(safe(res));
     } catch {
       return null;
     }
   },
 
-  /* =====================================================
-       ⭐ IMAGE UPLOAD (CLOUDINARY SAFE)
-  ===================================================== */
   createNews: async (formData) => {
+    if (!formData) return { error: "Missing data" };
     try {
       const token = getAuthToken();
-
       const res = await fetch(`${BASE_URL}/news`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-
       return await res.json();
     } catch {
       return { error: { message: "Upload failed" } };
@@ -243,6 +211,7 @@ export const api = {
   },
 
   updateNews: async (id, formData) => {
+    if (!id) return { error: "Invalid id" };
     try {
       const res = await instance.put(`/news/${id}`, formData);
       return safe(res);
@@ -252,6 +221,7 @@ export const api = {
   },
 
   deleteNews: async (id) => {
+    if (!id) return { error: "Invalid id" };
     try {
       const res = await instance.delete(`/news/${id}`);
       return safe(res);
@@ -260,28 +230,11 @@ export const api = {
     }
   },
 
-  likeNews: async (id) => {
-    try {
-      const res = await instance.post(`/news/${id}/like`);
-      return safe(res);
-    } catch {
-      return null;
-    }
-  },
-
-  incrementView: async (id) => {
-    try {
-      const res = await instance.post(`/news/${id}/view`);
-      return safe(res);
-    } catch {
-      return null;
-    }
-  },
-
   /* ============================
        💬 COMMENTS
   ============================ */
   getComments: async (newsId) => {
+    if (!newsId) return [];
     try {
       const res = await instance.get(`/news/${newsId}/comments`);
       return safe(res)?.comments ?? [];
@@ -291,6 +244,7 @@ export const api = {
   },
 
   addComment: async (newsId, text) => {
+    if (!newsId || !text) return { error: "Invalid comment" };
     try {
       const res = await instance.post(`/news/${newsId}/comment`, { text });
       return safe(res);
@@ -300,6 +254,7 @@ export const api = {
   },
 
   deleteComment: async (newsId, commentId) => {
+    if (!newsId || !commentId) return { error: "Invalid comment" };
     try {
       const res = await instance.delete(
         `/news/${newsId}/comment/${commentId}`
@@ -310,30 +265,6 @@ export const api = {
     }
   },
 
-  /* ============================
-       🔖 BOOKMARKS
-  ============================ */
-  getBookmarks: async () => {
-    try {
-      const res = await instance.get("/bookmarks");
-      return safe(res)?.bookmarks ?? [];
-    } catch {
-      return [];
-    }
-  },
-
-  toggleBookmark: async (newsId) => {
-    try {
-      const res = await instance.post(`/bookmarks/${newsId}`);
-      return safe(res);
-    } catch (err) {
-      return { error: errOut(err) };
-    }
-  },
-
-  /* ============================
-       🔧 UTILS
-  ============================ */
   getBaseUrl: () => BASE_URL,
 };
 
