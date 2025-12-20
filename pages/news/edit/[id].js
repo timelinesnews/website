@@ -27,7 +27,7 @@ export default function EditNewsPage() {
 
   const [form, setForm] = useState({
     headline: "",
-    description: "",
+    content: "",       // 🔥 FIX
     category: "",
     country: "",
     state: "",
@@ -83,7 +83,7 @@ export default function EditNewsPage() {
 
       setForm({
         headline: news.headline || "",
-        description: news.description || "",
+        content: news.content || "",   // 🔥 FIX
         category: news.category || "",
         country: loc.country || "",
         state: loc.state || "",
@@ -140,7 +140,7 @@ export default function EditNewsPage() {
     if (!form.headline.trim()) return "Headline is required.";
     if (form.headline.length < 10)
       return "Headline must be at least 10 characters.";
-    if (!form.description.trim()) return "Description is required.";
+    if (!form.content.trim()) return "Content is required.";
     if (!form.category) return "Please select a category.";
     if (!form.country || !form.state || !form.city)
       return "Country, state and city are required.";
@@ -165,7 +165,7 @@ export default function EditNewsPage() {
     try {
       const fd = new FormData();
       fd.append("headline", form.headline);
-      fd.append("description", form.description);
+      fd.append("content", form.content);   // 🔥 FIX
       fd.append("category", form.category);
       fd.append("country", form.country);
       fd.append("state", form.state);
@@ -186,7 +186,7 @@ export default function EditNewsPage() {
       if (!res.ok) throw new Error(json?.message || "Update failed");
 
       setMsg("✅ News updated successfully!");
-      setTimeout(() => router.push(`/news/${id}`), 900);
+      setTimeout(() => router.push(`/news/${id}`), 800);
     } catch (err) {
       setMsg("❌ " + err.message);
     }
@@ -253,11 +253,11 @@ export default function EditNewsPage() {
             style={styles.input}
           />
 
-          {/* DESCRIPTION */}
-          <label style={styles.label}>Description</label>
+          {/* CONTENT */}
+          <label style={styles.label}>Content</label>
           <textarea
-            value={form.description}
-            onChange={(e) => updateField("description", e.target.value)}
+            value={form.content}
+            onChange={(e) => updateField("content", e.target.value)}
             style={{ ...styles.input, minHeight: 120 }}
           />
 
@@ -321,12 +321,8 @@ export default function EditNewsPage() {
           <label style={styles.label}>Image</label>
           <div style={styles.imageRow}>
             <input type="file" accept="image/*" onChange={handleImage} />
-
             {(preview || existingImage) && (
-              <img
-                src={preview || existingImage}
-                style={styles.preview}
-              />
+              <img src={preview || existingImage} style={styles.preview} />
             )}
           </div>
 
