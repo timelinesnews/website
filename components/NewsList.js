@@ -27,20 +27,17 @@ export default function NewsList({
         INVALID / EMPTY DATA
   ============================= */
   if (!Array.isArray(news) || news.length === 0) {
-    return (
-      <div style={styles.empty}>
-        {emptyText}
-      </div>
-    );
+    return <div style={styles.empty}>{emptyText}</div>;
   }
 
   /* =============================
-        FILTER SAFE ITEMS
-        (avoid /news/undefined forever)
+        HARD FILTER (🔥 REAL FIX)
+        allow _id OR id only
   ============================= */
   const safeNews = news.filter((item) => {
-    if (!item?._id) {
-      console.warn("⚠️ News item missing _id:", item);
+    const id = item?._id || item?.id;
+    if (!id) {
+      console.warn("🚫 Dropped news without id:", item);
       return false;
     }
     return true;
@@ -59,12 +56,19 @@ export default function NewsList({
   ============================= */
   return (
     <div style={styles.list}>
-      {safeNews.map((item) => (
-        <NewsCard
-          key={item._id}
-          item={item}
-        />
-      ))}
+      {safeNews.map((item) => {
+        const key = String(item._id || item.id);
+
+        return (
+          <NewsCard
+            key={key}
+            item={{
+              ...item,
+              _id: item._id || item.id, // 🔥 normalize once
+            }}
+          />
+        );
+      })}
     </div>
   );
 }
