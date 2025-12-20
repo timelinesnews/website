@@ -71,7 +71,7 @@ export default function NewsView() {
   }, [id]);
 
   /* =========================
-     LOAD COMMENTS (AFTER NEWS)
+     LOAD COMMENTS
   ========================= */
   const loadComments = useCallback(async (newsId) => {
     if (!newsId) return;
@@ -104,7 +104,7 @@ export default function NewsView() {
   }, [news, loadComments]);
 
   /* =========================
-     COMMENT ACTIONS (SAFE)
+     COMMENT ACTIONS
   ========================= */
   const handlePostComment = async (text) => {
     if (!news?._id) return;
@@ -137,7 +137,7 @@ export default function NewsView() {
   };
 
   /* =========================
-     DELETE POST (SAFE)
+     DELETE POST
   ========================= */
   const deletePost = async () => {
     if (!news?._id) return;
@@ -155,11 +155,7 @@ export default function NewsView() {
      LOADING / NOT FOUND
   ========================= */
   if (loadingNews) {
-    return (
-      <div style={{ textAlign: "center", marginTop: 80 }}>
-        ⏳ Loading…
-      </div>
-    );
+    return <div style={{ textAlign: "center", marginTop: 80 }}>⏳ Loading…</div>;
   }
 
   if (!news) {
@@ -174,9 +170,7 @@ export default function NewsView() {
      OWNER / ADMIN
   ========================= */
   const isOwner =
-    profile &&
-    (profile._id === news.userId ||
-      profile.username === news.username);
+    profile && profile._id === news.user?._id;
 
   const isAdmin = profile?.role === "admin";
 
@@ -194,9 +188,6 @@ export default function NewsView() {
 
   const pageTitle = `${news.headline} | TIMELINES`;
 
-  /* =========================
-     UI
-  ========================= */
   return (
     <>
       <Head>
@@ -219,11 +210,13 @@ export default function NewsView() {
           )}
         </div>
 
-        <img
-          src={fixURL(news.image)}
-          alt={news.headline}
-          style={styles.mainImage}
-        />
+        {news.photoUrl && (
+          <img
+            src={fixURL(news.photoUrl)}
+            alt={news.headline}
+            style={styles.mainImage}
+          />
+        )}
 
         <div style={styles.metaRow}>
           <span>
@@ -239,17 +232,12 @@ export default function NewsView() {
           <div style={styles.ownerRow}>
             <button
               style={styles.editBtn}
-              onClick={() =>
-                router.push(`/news/edit/${news._id}`)
-              }
+              onClick={() => router.push(`/news/edit/${news._id}`)}
             >
               ✏️ Edit
             </button>
 
-            <button
-              style={styles.deleteBtn}
-              onClick={deletePost}
-            >
+            <button style={styles.deleteBtn} onClick={deletePost}>
               🗑 Delete
             </button>
           </div>
@@ -273,9 +261,7 @@ export default function NewsView() {
         {loadingComments ? (
           <p>⏳ Loading comments…</p>
         ) : comments.length === 0 ? (
-          <p style={{ color: "#888" }}>
-            No comments yet. Be the first!
-          </p>
+          <p style={{ color: "#888" }}>No comments yet. Be the first!</p>
         ) : (
           <CommentList
             comments={comments}
@@ -289,80 +275,24 @@ export default function NewsView() {
 }
 
 /* =========================
-   STYLES (UNCHANGED)
+   STYLES
 ========================= */
 const styles = {
-  container: {
-    maxWidth: 850,
-    margin: "30px auto",
-    padding: "0 16px",
-    fontFamily: "Inter, sans-serif",
-  },
-  headline: {
-    fontSize: 30,
-    fontWeight: 800,
-    marginBottom: 10,
-  },
-  badgeRow: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    marginBottom: 14,
-  },
-  category: {
-    background: "#e8f0fe",
-    padding: "4px 10px",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 700,
-    color: "#1a73e8",
-  },
-  location: {
-    background: "#e7f5ff",
-    padding: "4px 10px",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#1c7ed6",
-  },
+  container: { maxWidth: 850, margin: "30px auto", padding: "0 16px" },
+  headline: { fontSize: 30, fontWeight: 800 },
+  badgeRow: { display: "flex", gap: 10, marginBottom: 14 },
+  category: { background: "#e8f0fe", padding: "4px 10px", borderRadius: 8 },
+  location: { background: "#e7f5ff", padding: "4px 10px", borderRadius: 8 },
   mainImage: {
     width: "100%",
     borderRadius: 14,
     margin: "20px 0",
-    objectFit: "cover",
     maxHeight: 420,
+    objectFit: "cover",
   },
-  metaRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    color: "#555",
-    fontSize: 14,
-  },
-  description: {
-    fontSize: 17,
-    lineHeight: 1.7,
-    marginTop: 20,
-    color: "#333",
-  },
-  ownerRow: {
-    marginTop: 14,
-    display: "flex",
-    gap: 10,
-  },
-  editBtn: {
-    padding: "8px 14px",
-    background: "#1971c2",
-    color: "white",
-    borderRadius: 8,
-    border: "none",
-    cursor: "pointer",
-  },
-  deleteBtn: {
-    padding: "8px 14px",
-    background: "#ff4d4d",
-    color: "white",
-    borderRadius: 8,
-    border: "none",
-    cursor: "pointer",
-  },
+  metaRow: { display: "flex", justifyContent: "space-between", fontSize: 14 },
+  description: { fontSize: 17, lineHeight: 1.7, marginTop: 20 },
+  ownerRow: { marginTop: 14, display: "flex", gap: 10 },
+  editBtn: { padding: "8px 14px", background: "#1971c2", color: "white" },
+  deleteBtn: { padding: "8px 14px", background: "#ff4d4d", color: "white" },
 };
