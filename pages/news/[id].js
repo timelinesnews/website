@@ -32,11 +32,13 @@ export default function NewsView() {
     try {
       const p = await api.getProfile();
       if (p?.user || p) setProfile(p.user || p);
-    } catch {}
+    } catch {
+      setProfile(null);
+    }
   }, []);
 
   /* ======================================================
-     LOAD NEWS (FIXED)
+     LOAD NEWS (🔥 REAL FIX HERE)
   ====================================================== */
   const loadNews = useCallback(async () => {
     if (!id) return;
@@ -44,8 +46,19 @@ export default function NewsView() {
     setLoadingNews(true);
     try {
       const res = await api.getNewsById(id);
-      setNews(res || null); // ✅ FIX
-    } catch {
+
+      // 🔥 HANDLE BOTH API SHAPES (wrapped & direct)
+      const safeNews = res?.data || res || null;
+
+      if (!safeNews?._id && !safeNews?.id) {
+        console.warn("⚠️ Invalid news payload:", res);
+        setMsg("News not found");
+        setNews(null);
+      } else {
+        setNews(safeNews);
+      }
+    } catch (err) {
+      console.error("Load news error:", err);
       setMsg("❌ Failed to load news.");
       setNews(null);
     }
@@ -53,17 +66,18 @@ export default function NewsView() {
   }, [id]);
 
   /* ======================================================
-     LOAD COMMENTS (FIXED)
+     LOAD COMMENTS
   ====================================================== */
   const loadComments = useCallback(async () => {
     if (!id) return;
 
     setLoadingComments(true);
     try {
-      const list = await api.getComments(id); // ✅ FIX
-      setComments(list || []);
-    } catch {
-      console.warn("Comments load error");
+      const list = await api.getComments(id);
+      setComments(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.warn("Comments load error:", err);
+      setComments([]);
     }
     setLoadingComments(false);
   }, [id]);
@@ -79,11 +93,11 @@ export default function NewsView() {
   }, [id, loadProfile, loadNews, loadComments]);
 
   /* ======================================================
-     COMMENT POSTING (KEPT)
+     COMMENT POSTING
   ====================================================== */
   const handlePostComment = async (text) => {
     try {
-      const res = await api.addComment(id, text); // ✅ FIX
+      const res = await api.addComment(id, text);
       if (!res?.error) loadComments();
       else alert("❌ Failed to post comment");
     } catch {
@@ -92,11 +106,11 @@ export default function NewsView() {
   };
 
   /* ======================================================
-     DELETE COMMENT (KEPT)
+     DELETE COMMENT
   ====================================================== */
   const handleDeleteComment = async (commentId) => {
     try {
-      await api.deleteComment(id, commentId); // ✅ FIX
+      await api.deleteComment(id, commentId);
       setComments((prev) => prev.filter((c) => c._id !== commentId));
     } catch {
       alert("Error deleting comment");
@@ -110,8 +124,8 @@ export default function NewsView() {
     !url
       ? "/placeholder.jpg"
       : url.startsWith("http")
-      ? url
-      : `${BACKEND}/${url.replace(/^\//, "")}`;
+        ? url
+        : `${BACKEND}/${url.replace(/^\//, "")}`;
 
   /* ======================================================
      SHARE
@@ -128,15 +142,15 @@ export default function NewsView() {
   };
 
   /* ======================================================
-     DELETE POST (KEPT)
+     DELETE POST
   ====================================================== */
   const deletePost = async () => {
     if (!confirm("Delete this post permanently?")) return;
 
     try {
-      await api.deleteNews(id); // ✅ FIX
+      await api.deleteNews(id);
       router.push("/profile/posts");
-    } catch (err) {
+    } catch {
       alert("Error deleting post");
     }
   };
@@ -144,27 +158,29 @@ export default function NewsView() {
   /* ======================================================
      LOADING / NOT FOUND
   ====================================================== */
-  if (loadingNews)
+  if (loadingNews) {
     return (
       <div style={{ textAlign: "center", marginTop: 80 }}>
         ⏳ Loading…
       </div>
     );
+  }
 
-  if (!news)
+  if (!news) {
     return (
       <div style={{ textAlign: "center", marginTop: 80, color: "red" }}>
         {msg || "News not found"}
       </div>
     );
+  }
 
   /* ======================================================
-     OWNER CHECK
+     OWNER CHECK (SAFE)
   ====================================================== */
   const isOwner =
     profile &&
-    (profile._id === news.userId ||
-      profile.username === news.username);
+    (profile._id === news?.userId ||
+      profile.username === news?.username);
 
   const isAdmin = profile && profile.role === "admin";
 
@@ -191,11 +207,9 @@ export default function NewsView() {
         <title>{pageTitle}</title>
         <meta
           name="description"
-          content={
-            (news.content || "")
-              .replace(/<[^>]+>/g, "")
-              .slice(0, 160)
-          }
+          content={(news.content || "")
+            .replace(/<[^>]+>/g, "")
+            .slice(0, 160)}
         />
       </Head>
 
@@ -217,7 +231,10 @@ export default function NewsView() {
 
         <div style={styles.metaRow}>
           <span>
-            📅 {new Date(news.createdAt).toLocaleDateString()}
+            📅{" "}
+            {news.createdAt
+              ? new Date(news.createdAt).toLocaleDateString()
+              : "—"}
           </span>
           <span>👁 {news.views || 0} views</span>
         </div>
