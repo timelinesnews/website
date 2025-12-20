@@ -1,4 +1,3 @@
-// pages/profile/posts.js
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
@@ -19,41 +18,64 @@ export default function MyPosts() {
   const [loading, setLoading] = useState(true);
 
   /* ======================================================
-     PROTECT ROUTE + LOAD DATA
+     LOAD PROFILE + MY POSTS
   ====================================================== */
   useEffect(() => {
     loadData();
   }, []);
 
-  async function loadData() {
-    try {
-      const data = await api.getProfile();
-      const user = data?.user || data;
+  const loadData = async () => {
+    setLoading(true);
 
-      if (!user) {
+    try {
+      /* ---------- PROFILE ---------- */
+      const profileRes = await api.getProfile();
+      const user = profileRes?.user || profileRes;
+
+      if (!user?._id) {
         router.replace("/login");
         return;
       }
 
       setProfile(user);
 
-      const allNews = await api.getNews();
-      const safeNews = Array.isArray(allNews) ? allNews : [];
+      /* ---------- NEWS ---------- */
+      const newsRes = await api.getNews();
 
-      // ✅ filter my posts (_id OR id supported)
-      const myPosts = safeNews.filter(
-        (p) =>
-          (p?._id || p?.id) &&
-          (
-            p?.createdBy?._id === user._id ||
-            p?.author?._id === user._id ||
-            p?.userId === user._id
-          )
-      );
+      const allNews =
+        newsRes?.news ||
+        newsRes?.data ||
+        newsRes ||
+        [];
 
-      // 🔒 HARD SAFETY
+      const list = Array.isArray(allNews) ? allNews : [];
+
+      /* ---------- FILTER MY POSTS ---------- */
+      const myPosts = list.filter((p) => {
+        if (!p) return false;
+
+        const postUserId =
+          p?.createdBy?._id ||
+          p?.author?._id ||
+          p?.userId ||
+          null;
+
+        if (postUserId) {
+          return postUserId === user._id;
+        }
+
+        // fallback (username-based)
+        if (p?.username && user?.username) {
+          return p.username === user.username;
+        }
+
+        return false;
+      });
+
+      /* ---------- HARD SAFETY ---------- */
       const safePosts = myPosts.filter((p) => {
-        if (!p?._id && !p?.id) {
+        const pid = p?._id || p?.id;
+        if (!pid) {
           console.warn("⚠️ Dropped profile post without id:", p);
           return false;
         }
@@ -62,24 +84,24 @@ export default function MyPosts() {
 
       setPosts(safePosts);
     } catch (err) {
-      console.error("Failed to load posts:", err);
+      console.error("❌ Failed to load profile posts:", err);
+      setPosts([]);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   /* ======================================================
      IMAGE FIX
   ====================================================== */
   const fixImage = (img) => {
-    if (!img) return "/placeholder.jpg";
-    return img.startsWith("http")
-      ? img
-      : `${BACKEND}/${img.replace(/^\/+/, "")}`;
+    if (!img) return "/default-user.png";
+    if (img.startsWith("http")) return img;
+    return `${BACKEND}/${img.replace(/^\/+/, "")}`;
   };
 
   /* ======================================================
-     SAFE NAVIGATION (FINAL FIX)
+     SAFE NAVIGATION
   ====================================================== */
   const openPost = (post) => {
     const postId = post?._id || post?.id;
@@ -93,10 +115,13 @@ export default function MyPosts() {
   /* ======================================================
      LOADING / EMPTY
   ====================================================== */
-  if (loading)
+  if (loading) {
     return (
-      <div style={styles.loading}>⏳ Loading your posts…</div>
+      <div style={styles.loading}>
+        ⏳ Loading your posts…
+      </div>
     );
+  }
 
   return (
     <>
@@ -113,7 +138,7 @@ export default function MyPosts() {
 
         {profile && (
           <div style={styles.subTitle}>
-            Showing posts created by:{" "}
+            Showing posts created by{" "}
             <b>{profile.name || profile.username}</b>
           </div>
         )}
@@ -130,10 +155,10 @@ export default function MyPosts() {
 
         <div style={{ marginTop: 20 }}>
           {posts.map((post) => {
-            const postKey = String(post._id || post.id);
+            const postId = post._id || post.id;
 
             return (
-              <div key={postKey} style={styles.card}>
+              <div key={String(postId)} style={styles.card}>
                 <img
                   src={fixImage(post.image)}
                   alt={post.headline}
@@ -151,7 +176,9 @@ export default function MyPosts() {
                   </h3>
 
                   <div style={styles.meta}>
-                    {new Date(post.createdAt).toLocaleString()}
+                    {post.createdAt
+                      ? new Date(post.createdAt).toLocaleString()
+                      : "—"}
                   </div>
 
                   <div style={styles.stats}>
@@ -162,7 +189,7 @@ export default function MyPosts() {
 
                 <button
                   onClick={() =>
-                    router.push(`/news/edit/${postKey}`)
+                    router.push(`/news/edit/${postId}`)
                   }
                   style={styles.editBtn}
                 >

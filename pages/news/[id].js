@@ -1,4 +1,3 @@
-// pages/news/[id].js
 import React, { useEffect, useState, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
@@ -22,7 +21,7 @@ export default function NewsView() {
   const [profile, setProfile] = useState(null);
   const [comments, setComments] = useState([]);
   const [loadingNews, setLoadingNews] = useState(true);
-  const [loadingComments, setLoadingComments] = useState(true);
+  const [loadingComments, setLoadingComments] = useState(false);
   const [msg, setMsg] = useState("");
 
   /* ======================================================
@@ -30,43 +29,54 @@ export default function NewsView() {
   ====================================================== */
   const loadProfile = useCallback(async () => {
     try {
-      const p = await api.getProfile();
-      if (p?.user || p) setProfile(p.user || p);
+      const res = await api.getProfile();
+      setProfile(res?.user || res || null);
     } catch {
       setProfile(null);
     }
   }, []);
 
   /* ======================================================
-     LOAD NEWS (🔥 REAL FIX HERE)
+     LOAD NEWS (FINAL SAFE VERSION)
   ====================================================== */
   const loadNews = useCallback(async () => {
     if (!id) return;
 
     setLoadingNews(true);
+    setMsg("");
+
     try {
       const res = await api.getNewsById(id);
 
-      // 🔥 HANDLE BOTH API SHAPES (wrapped & direct)
-      const safeNews = res?.data || res || null;
+      // ✅ HANDLE ALL POSSIBLE SHAPES
+      const safeNews =
+        res?.news ||
+        res?.data?.news ||
+        res?.data ||
+        res ||
+        null;
 
-      if (!safeNews?._id && !safeNews?.id) {
+      if (!safeNews || !(safeNews._id || safeNews.id)) {
         console.warn("⚠️ Invalid news payload:", res);
-        setMsg("News not found");
         setNews(null);
+        setMsg("News not found");
       } else {
-        setNews(safeNews);
+        setNews({
+          ...safeNews,
+          _id: safeNews._id || safeNews.id, // normalize
+        });
       }
     } catch (err) {
       console.error("Load news error:", err);
-      setMsg("❌ Failed to load news.");
+      setMsg("❌ Failed to load news");
       setNews(null);
     }
+
     setLoadingNews(false);
   }, [id]);
 
   /* ======================================================
-     LOAD COMMENTS
+     LOAD COMMENTS (GUARDED)
   ====================================================== */
   const loadComments = useCallback(async () => {
     if (!id) return;
@@ -89,11 +99,18 @@ export default function NewsView() {
     if (!id) return;
     loadProfile();
     loadNews();
-    loadComments();
-  }, [id, loadProfile, loadNews, loadComments]);
+  }, [id, loadProfile, loadNews]);
 
   /* ======================================================
-     COMMENT POSTING
+     LOAD COMMENTS AFTER NEWS
+  ====================================================== */
+  useEffect(() => {
+    if (!news?._id) return;
+    loadComments();
+  }, [news, loadComments]);
+
+  /* ======================================================
+     COMMENT ACTIONS
   ====================================================== */
   const handlePostComment = async (text) => {
     try {
@@ -105,9 +122,6 @@ export default function NewsView() {
     }
   };
 
-  /* ======================================================
-     DELETE COMMENT
-  ====================================================== */
   const handleDeleteComment = async (commentId) => {
     try {
       await api.deleteComment(id, commentId);
@@ -120,25 +134,10 @@ export default function NewsView() {
   /* ======================================================
      IMAGE FIX
   ====================================================== */
-  const fixURL = (url) =>
-    !url
-      ? "/placeholder.jpg"
-      : url.startsWith("http")
-        ? url
-        : `${BACKEND}/${url.replace(/^\//, "")}`;
-
-  /* ======================================================
-     SHARE
-  ====================================================== */
-  const shareWhatsApp = () => {
-    window.open(
-      `https://wa.me/?text=${encodeURIComponent(window.location.href)}`
-    );
-  };
-
-  const copyLink = async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    alert("🔗 Link copied!");
+  const fixURL = (url) => {
+    if (!url) return "/default-user.png";
+    if (url.startsWith("http")) return url;
+    return `${BACKEND}/${url.replace(/^\//, "")}`;
   };
 
   /* ======================================================
@@ -175,23 +174,23 @@ export default function NewsView() {
   }
 
   /* ======================================================
-     OWNER CHECK (SAFE)
+     OWNER / ADMIN CHECK
   ====================================================== */
   const isOwner =
     profile &&
-    (profile._id === news?.userId ||
-      profile.username === news?.username);
+    (profile._id === news.userId ||
+      profile.username === news.username);
 
-  const isAdmin = profile && profile.role === "admin";
+  const isAdmin = profile?.role === "admin";
 
   /* ======================================================
      LOCATION TEXT
   ====================================================== */
   const locationText = [
-    news?.location?.village,
-    news?.location?.city,
-    news?.location?.state,
-    news?.location?.country,
+    news.location?.village,
+    news.location?.city,
+    news.location?.state,
+    news.location?.country,
   ]
     .filter(Boolean)
     .join(", ");
@@ -243,7 +242,7 @@ export default function NewsView() {
           <div style={styles.ownerRow}>
             <button
               style={styles.editBtn}
-              onClick={() => router.push(`/news/edit/${id}`)}
+              onClick={() => router.push(`/news/edit/${news._id}`)}
             >
               ✏️ Edit
             </button>
@@ -261,31 +260,6 @@ export default function NewsView() {
           style={styles.description}
           dangerouslySetInnerHTML={{ __html: news.content }}
         />
-
-        <h3 style={{ marginTop: 30 }}>Share this news</h3>
-
-        <div style={styles.shareRow}>
-          <button style={styles.shareBtn} onClick={shareWhatsApp}>
-            📲 WhatsApp
-          </button>
-
-          <button
-            style={styles.shareBtn}
-            onClick={() =>
-              window.open(
-                `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
-                  window.location.href
-                )}`
-              )
-            }
-          >
-            👍 Facebook
-          </button>
-
-          <button style={styles.shareBtn} onClick={copyLink}>
-            🔗 Copy Link
-          </button>
-        </div>
 
         <h2 style={{ marginTop: 40 }}>Comments</h2>
 
@@ -316,7 +290,7 @@ export default function NewsView() {
 }
 
 /* ======================================================
-   STYLES (UNCHANGED)
+   STYLES
 ===================================================== */
 const styles = {
   container: {
@@ -391,18 +365,5 @@ const styles = {
     borderRadius: 8,
     border: "none",
     cursor: "pointer",
-  },
-  shareRow: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  shareBtn: {
-    padding: "10px 14px",
-    background: "#eee",
-    borderRadius: 8,
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 600,
   },
 };
