@@ -9,10 +9,10 @@ const BACKEND =
   "https://backend-7752.onrender.com";
 
 /* =========================
-   URL NORMALIZER
+   URL NORMALIZER (SAFE)
 ========================= */
 const fullUrl = (url) => {
-  if (!url) return null;
+  if (!url || typeof url !== "string") return null;
   if (url.startsWith("http")) return url;
   return `${BACKEND}/${url.replace(/^\/+/, "")}`;
 };
@@ -23,18 +23,20 @@ export default function NewsCard({ item }) {
   ========================= */
   if (!item) return null;
 
-  const newsId = item._id || item.id;
+  const newsId = item._id || item.id || item.newsId;
   if (!newsId) {
     console.warn("🚫 NewsCard skipped (no id)", item);
     return null;
   }
 
   /* =========================
-     IMAGE RESOLUTION (🔥 FIX)
+     IMAGE RESOLUTION (🔥 FINAL FIX)
   ========================= */
   const imageSrc =
     fullUrl(item.photoUrl) ||               // 📰 news image
-    fullUrl(item.user?.profilePicture) ||   // 👤 author image
+    fullUrl(item.image) ||                  // 🖼 alt image field
+    fullUrl(item.cover) ||                  // 🧱 cover
+    fullUrl(item.thumbnail) ||              // 🎞 thumbnail
     "/placeholder.jpg";                     // 🧱 fallback
 
   /* =========================
@@ -52,7 +54,7 @@ export default function NewsCard({ item }) {
   /* =========================
      TEXT CLEAN
   ========================= */
-  const cleanText = (item.content || "").replace(/<[^>]+>/g, "");
+  const cleanText = String(item.content || "").replace(/<[^>]+>/g, "");
   const excerpt =
     cleanText.length > 140
       ? cleanText.slice(0, 140) + "…"
@@ -67,7 +69,7 @@ export default function NewsCard({ item }) {
       month: "short",
       year: "numeric",
     })
-    : "";
+    : "—";
 
   /* =========================
      UI
@@ -125,6 +127,7 @@ const styles = {
     boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
     textDecoration: "none",
     color: "#111",
+    transition: "transform .15s ease, box-shadow .15s ease",
   },
   image: {
     width: 132,
