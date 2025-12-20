@@ -1,14 +1,7 @@
-// pages/profile/index.js
 import React, { useEffect, useState, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { api } from "../../services/api";
-
-/* 🔐 BACKEND URL (safe for prod) */
-const BACKEND =
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  process.env.NEXT_PUBLIC_BACKEND ||
-  "https://backend-7752.onrender.com";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -30,37 +23,23 @@ export default function ProfilePage() {
       }
 
       const u = profile.user || profile;
-
-      if (u.avatar && !u.avatar.startsWith("http")) {
-        u.avatar = `${BACKEND}/${u.avatar.replace(/^\/+/, "")}`;
-      }
-
       setUser(u);
 
-      /* 🔥 Load & NORMALIZE user's posts */
-      const allNews = await api.getNews();
+      /* LOAD MY POSTS */
+      const res = await api.getNews();
+      const list = Array.isArray(res) ? res : res?.data || [];
 
-      const posts = (Array.isArray(allNews) ? allNews : [])
+      const posts = list
         .filter(
           (n) =>
-            n?.createdBy?._id === u._id ||
+            n?.user?.id === u._id ||
             n?.userId === u._id
         )
         .map((n) => ({
           ...n,
-          _id:
-            n._id ||
-            n.id ||
-            n.newsId ||
-            n?.news?._id, // 🔥 HARD NORMALIZATION
+          _id: n._id || n.id,
         }))
-        .filter((n) => {
-          if (!n._id) {
-            console.warn("🚫 Dropped profile post without id:", n);
-            return false;
-          }
-          return true;
-        });
+        .filter((n) => n._id);
 
       setMyPosts(posts);
     } catch (err) {
@@ -74,87 +53,31 @@ export default function ProfilePage() {
     loadProfile();
   }, [loadProfile]);
 
-  const fullUrl = (url) =>
-    !url
-      ? null
-      : url.startsWith("http")
-        ? url
-        : `${BACKEND}/${url.replace(/^\/+/, "")}`;
-
   const logoutUser = () => {
     api.logout();
     router.push("/login");
   };
 
-  /* ================= SMALL COMPONENTS ================= */
-
-  const StatCard = ({ label, value, icon, onClick }) => (
-    <div style={styles.statCard} onClick={onClick}>
-      <div style={styles.statIcon}>{icon}</div>
-      <div style={styles.statValue}>{value}</div>
-      <div style={styles.statLabel}>{label}</div>
-    </div>
-  );
-
-  const UserListModal = ({ title, list = [], onClose }) => (
-    <div style={styles.modalOverlay}>
-      <div style={styles.modalBox}>
-        <h3 style={styles.modalTitle}>{title}</h3>
-
-        {list.length === 0 ? (
-          <p style={{ textAlign: "center", color: "#666" }}>
-            No users found.
-          </p>
-        ) : (
-          list.map((u, i) => (
-            <div key={i} style={styles.modalUserRow}>
-              <img
-                src={fullUrl(u.avatar) || "/default.png"}
-                alt={u.name}
-                loading="lazy"
-                style={styles.modalAvatar}
-              />
-              <div>
-                <div style={styles.modalName}>{u.name}</div>
-                <div style={styles.modalUsername}>
-                  @{u.username}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-
-        <button style={styles.modalCloseBtn} onClick={onClose}>
-          Close
-        </button>
-      </div>
-    </div>
-  );
-
-  /* 🔥 FIXED POST CARD */
+  /* ================= POST CARD ================= */
   const PostCard = ({ item }) => {
-    const postId = item?._id;
-
-    const handleOpen = () => {
-      if (!postId) {
-        console.error("❌ Blocked navigation without postId:", item);
-        return;
-      }
-      router.push(`/news/${postId}`);
+    const openPost = () => {
+      if (!item?._id) return;
+      router.push(`/news/${item._id}`);
     };
 
     return (
-      <div style={styles.postCard} onClick={handleOpen}>
+      <div style={styles.postCard} onClick={openPost}>
         <h3 style={styles.postTitle}>{item.headline}</h3>
 
-        {item.image && (
-          <img
-            src={fullUrl(item.image)}
-            style={styles.postImage}
-            alt={item.headline}
-            loading="lazy"
-          />
-        )}
+        <img
+          src={item.photoUrl || "/placeholder.jpg"}
+          alt={item.headline}
+          loading="lazy"
+          style={styles.postImage}
+          onError={(e) => {
+            e.currentTarget.src = "/placeholder.jpg";
+          }}
+        />
 
         <p style={styles.postDesc}>
           {(item.content || "")
@@ -167,28 +90,18 @@ export default function ProfilePage() {
   };
 
   /* ================= LOADING ================= */
-  if (loading)
-    return (
-      <div style={styles.loading}>⏳ Loading profile…</div>
-    );
+  if (loading) {
+    return <div style={styles.loading}>⏳ Loading profile…</div>;
+  }
 
-  if (!user)
-    return (
-      <div style={styles.loading}>
-        ❌ Failed to load profile.
-      </div>
-    );
-
-  const pageTitle = `${user.name} (@${user.username}) | TIMELINES`;
+  if (!user) {
+    return <div style={styles.loading}>❌ Failed to load profile.</div>;
+  }
 
   return (
     <>
       <Head>
-        <title>{pageTitle}</title>
-        <meta
-          name="description"
-          content={`View ${user.name}'s profile and posts on TIMELINES.`}
-        />
+        <title>{user.name} (@{user.username}) | TIMELINES</title>
       </Head>
 
       <div style={styles.wrapper}>
@@ -196,23 +109,19 @@ export default function ProfilePage() {
 
         <div style={styles.profileTopCard}>
           <div style={styles.avatarWrapper}>
-            {user.avatar ? (
-              <img
-                src={user.avatar}
-                style={styles.avatar}
-                alt={user.name}
-              />
-            ) : (
-              <div style={styles.emptyAvatar}>
-                {user.name?.charAt(0)?.toUpperCase()}
-              </div>
-            )}
+            <img
+              src={user.avatar || "/default-user.png"}
+              alt={user.name}
+              style={styles.avatar}
+              onError={(e) => {
+                e.currentTarget.src = "/default-user.png";
+              }}
+            />
           </div>
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.name}>{user.name}</div>
             <div style={styles.username}>@{user.username}</div>
-
             <div style={styles.location}>
               📍 {user.city}, {user.state}, {user.country}
             </div>
@@ -227,39 +136,12 @@ export default function ProfilePage() {
             </button>
 
             <button
-              onClick={() => router.push("/settings")}
-              style={styles.btn}
-            >
-              ⚙️ Settings
-            </button>
-
-            <button
               onClick={logoutUser}
-              style={{
-                ...styles.btn,
-                background: "#ffe5e5",
-                color: "#c00",
-              }}
+              style={{ ...styles.btn, background: "#ffe5e5", color: "#c00" }}
             >
               🚪 Logout
             </button>
           </div>
-        </div>
-
-        <div style={styles.statsRow}>
-          <StatCard label="Posts" value={myPosts.length} icon="📰" />
-          <StatCard
-            label="Followers"
-            value={user.followers?.length || 0}
-            icon="👥"
-            onClick={() => setShowFollowers(true)}
-          />
-          <StatCard
-            label="Following"
-            value={user.following?.length || 0}
-            icon="➡️"
-            onClick={() => setShowFollowing(true)}
-          />
         </div>
 
         <h2 style={styles.sectionTitle}>My Posts</h2>
@@ -273,26 +155,54 @@ export default function ProfilePage() {
             <PostCard key={item._id} item={item} />
           ))
         )}
-
-        {showFollowers && (
-          <UserListModal
-            title="Followers"
-            list={user.followers || []}
-            onClose={() => setShowFollowers(false)}
-          />
-        )}
-
-        {showFollowing && (
-          <UserListModal
-            title="Following"
-            list={user.following || []}
-            onClose={() => setShowFollowing(false)}
-          />
-        )}
       </div>
     </>
   );
 }
 
 /* ================= STYLES ================= */
-const styles = { /* unchanged styles */ };
+const styles = {
+  wrapper: { maxWidth: 900, margin: "0 auto", paddingBottom: 60 },
+  cover: {
+    height: 140,
+    background: "linear-gradient(135deg,#4f46e5,#3b82f6)",
+  },
+  profileTopCard: {
+    background: "#fff",
+    padding: 24,
+    marginTop: -55,
+    borderRadius: 16,
+    textAlign: "center",
+  },
+  avatarWrapper: { display: "flex", justifyContent: "center" },
+  avatar: {
+    width: 110,
+    height: 110,
+    borderRadius: "50%",
+    objectFit: "cover",
+  },
+  name: { fontSize: 23, fontWeight: 800 },
+  username: { color: "#777" },
+  location: { fontSize: 14, color: "#555" },
+  btnRow: { display: "flex", gap: 12, justifyContent: "center", marginTop: 18 },
+  btn: { padding: "8px 16px", borderRadius: 10 },
+  sectionTitle: { fontSize: 22, fontWeight: 700, marginTop: 30 },
+  postCard: {
+    background: "#fff",
+    padding: 18,
+    borderRadius: 16,
+    marginBottom: 16,
+    cursor: "pointer",
+  },
+  postTitle: { fontSize: 18, fontWeight: 700 },
+  postImage: {
+    width: "100%",
+    height: 220,
+    objectFit: "cover",
+    borderRadius: 14,
+    margin: "10px 0",
+  },
+  postDesc: { color: "#444" },
+  empty: { textAlign: "center", marginTop: 40 },
+  loading: { textAlign: "center", marginTop: 60 },
+};
