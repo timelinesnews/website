@@ -50,37 +50,45 @@ export default function MyPosts() {
 
       const list = Array.isArray(allNews) ? allNews : [];
 
-      /* ---------- FILTER MY POSTS ---------- */
-      const myPosts = list.filter((p) => {
-        if (!p) return false;
+      /* ---------- FILTER + NORMALIZE MY POSTS ---------- */
+      const safePosts = list
+        .filter((p) => {
+          if (!p) return false;
 
-        const postUserId =
-          p?.createdBy?._id ||
-          p?.author?._id ||
-          p?.userId ||
-          null;
+          const postUserId =
+            p?.createdBy?._id ||
+            p?.author?._id ||
+            p?.userId ||
+            null;
 
-        if (postUserId) {
-          return postUserId === user._id;
-        }
+          if (postUserId) {
+            return postUserId === user._id;
+          }
 
-        // fallback (username-based)
-        if (p?.username && user?.username) {
-          return p.username === user.username;
-        }
+          if (p?.username && user?.username) {
+            return p.username === user.username;
+          }
 
-        return false;
-      });
-
-      /* ---------- HARD SAFETY ---------- */
-      const safePosts = myPosts.filter((p) => {
-        const pid = p?._id || p?.id;
-        if (!pid) {
-          console.warn("⚠️ Dropped profile post without id:", p);
           return false;
-        }
-        return true;
-      });
+        })
+        .map((p) => {
+          const realId =
+            p?._id ||
+            p?.id ||
+            p?.newsId ||
+            p?.news?._id;
+
+          if (!realId) {
+            console.warn("🚫 Dropped post without resolvable id:", p);
+            return null;
+          }
+
+          return {
+            ...p,
+            _id: String(realId), // 🔥 FORCE ID
+          };
+        })
+        .filter(Boolean);
 
       setPosts(safePosts);
     } catch (err) {
@@ -104,12 +112,11 @@ export default function MyPosts() {
      SAFE NAVIGATION
   ====================================================== */
   const openPost = (post) => {
-    const postId = post?._id || post?.id;
-    if (!postId) {
-      console.error("🚨 Tried to open post with invalid id", post);
+    if (!post?._id) {
+      console.error("🚨 Blocked navigation without post id:", post);
       return;
     }
-    router.push(`/news/${postId}`);
+    router.push(`/news/${post._id}`);
   };
 
   /* ======================================================
@@ -154,50 +161,46 @@ export default function MyPosts() {
         )}
 
         <div style={{ marginTop: 20 }}>
-          {posts.map((post) => {
-            const postId = post._id || post.id;
+          {posts.map((post) => (
+            <div key={post._id} style={styles.card}>
+              <img
+                src={fixImage(post.image)}
+                alt={post.headline}
+                loading="lazy"
+                style={styles.image}
+                onClick={() => openPost(post)}
+              />
 
-            return (
-              <div key={String(postId)} style={styles.card}>
-                <img
-                  src={fixImage(post.image)}
-                  alt={post.headline}
-                  loading="lazy"
-                  style={styles.image}
+              <div style={{ flex: 1 }}>
+                <h3
+                  style={styles.headline}
                   onClick={() => openPost(post)}
-                />
+                >
+                  {post.headline}
+                </h3>
 
-                <div style={{ flex: 1 }}>
-                  <h3
-                    style={styles.headline}
-                    onClick={() => openPost(post)}
-                  >
-                    {post.headline}
-                  </h3>
-
-                  <div style={styles.meta}>
-                    {post.createdAt
-                      ? new Date(post.createdAt).toLocaleString()
-                      : "—"}
-                  </div>
-
-                  <div style={styles.stats}>
-                    <span>👍 {post.likes || 0}</span>
-                    <span>👁️ {post.views || 0}</span>
-                  </div>
+                <div style={styles.meta}>
+                  {post.createdAt
+                    ? new Date(post.createdAt).toLocaleString()
+                    : "—"}
                 </div>
 
-                <button
-                  onClick={() =>
-                    router.push(`/news/edit/${postId}`)
-                  }
-                  style={styles.editBtn}
-                >
-                  ✏️ Edit
-                </button>
+                <div style={styles.stats}>
+                  <span>👍 {post.likes || 0}</span>
+                  <span>👁️ {post.views || 0}</span>
+                </div>
               </div>
-            );
-          })}
+
+              <button
+                onClick={() =>
+                  router.push(`/news/edit/${post._id}`)
+                }
+                style={styles.editBtn}
+              >
+                ✏️ Edit
+              </button>
+            </div>
+          ))}
         </div>
       </div>
     </>
