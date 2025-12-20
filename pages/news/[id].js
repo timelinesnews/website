@@ -7,7 +7,7 @@ import { api } from "../../services/api";
 import CommentBox from "../../components/comments/CommentBox";
 import CommentList from "../../components/comments/CommentList";
 
-/* 🔐 BACKEND URL (safe for prod) */
+/* 🔐 BACKEND URL */
 const BACKEND =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   process.env.NEXT_PUBLIC_BACKEND ||
@@ -24,9 +24,9 @@ export default function NewsView() {
   const [loadingComments, setLoadingComments] = useState(false);
   const [msg, setMsg] = useState("");
 
-  /* ======================================================
+  /* =========================
      LOAD PROFILE
-  ====================================================== */
+  ========================= */
   const loadProfile = useCallback(async () => {
     try {
       const res = await api.getProfile();
@@ -36,9 +36,9 @@ export default function NewsView() {
     }
   }, []);
 
-  /* ======================================================
-     LOAD NEWS (FINAL SAFE VERSION)
-  ====================================================== */
+  /* =========================
+     LOAD NEWS (SAFE)
+  ========================= */
   const loadNews = useCallback(async () => {
     if (!id) return;
 
@@ -48,13 +48,8 @@ export default function NewsView() {
     try {
       const res = await api.getNewsById(id);
 
-      // ✅ HANDLE ALL POSSIBLE SHAPES
       const safeNews =
-        res?.news ||
-        res?.data?.news ||
-        res?.data ||
-        res ||
-        null;
+        res?.news || res?.data?.news || res?.data || res || null;
 
       if (!safeNews || !(safeNews._id || safeNews.id)) {
         console.warn("⚠️ Invalid news payload:", res);
@@ -63,7 +58,7 @@ export default function NewsView() {
       } else {
         setNews({
           ...safeNews,
-          _id: safeNews._id || safeNews.id, // normalize
+          _id: safeNews._id || safeNews.id,
         });
       }
     } catch (err) {
@@ -75,47 +70,47 @@ export default function NewsView() {
     setLoadingNews(false);
   }, [id]);
 
-  /* ======================================================
-     LOAD COMMENTS (GUARDED)
-  ====================================================== */
-  const loadComments = useCallback(async () => {
-    if (!id) return;
+  /* =========================
+     LOAD COMMENTS (AFTER NEWS)
+  ========================= */
+  const loadComments = useCallback(async (newsId) => {
+    if (!newsId) return;
 
     setLoadingComments(true);
     try {
-      const list = await api.getComments(id);
+      const list = await api.getComments(newsId);
       setComments(Array.isArray(list) ? list : []);
-    } catch (err) {
-      console.warn("Comments load error:", err);
+    } catch {
       setComments([]);
     }
     setLoadingComments(false);
-  }, [id]);
+  }, []);
 
-  /* ======================================================
+  /* =========================
      INITIAL LOAD
-  ====================================================== */
+  ========================= */
   useEffect(() => {
     if (!id) return;
     loadProfile();
     loadNews();
   }, [id, loadProfile, loadNews]);
 
-  /* ======================================================
+  /* =========================
      LOAD COMMENTS AFTER NEWS
-  ====================================================== */
+  ========================= */
   useEffect(() => {
     if (!news?._id) return;
-    loadComments();
+    loadComments(news._id);
   }, [news, loadComments]);
 
-  /* ======================================================
-     COMMENT ACTIONS
-  ====================================================== */
+  /* =========================
+     COMMENT ACTIONS (SAFE)
+  ========================= */
   const handlePostComment = async (text) => {
+    if (!news?._id) return;
     try {
-      const res = await api.addComment(id, text);
-      if (!res?.error) loadComments();
+      const res = await api.addComment(news._id, text);
+      if (!res?.error) loadComments(news._id);
       else alert("❌ Failed to post comment");
     } catch {
       alert("Error posting comment");
@@ -123,40 +118,42 @@ export default function NewsView() {
   };
 
   const handleDeleteComment = async (commentId) => {
+    if (!news?._id) return;
     try {
-      await api.deleteComment(id, commentId);
+      await api.deleteComment(news._id, commentId);
       setComments((prev) => prev.filter((c) => c._id !== commentId));
     } catch {
       alert("Error deleting comment");
     }
   };
 
-  /* ======================================================
+  /* =========================
      IMAGE FIX
-  ====================================================== */
+  ========================= */
   const fixURL = (url) => {
     if (!url) return "/default-user.png";
     if (url.startsWith("http")) return url;
     return `${BACKEND}/${url.replace(/^\//, "")}`;
   };
 
-  /* ======================================================
-     DELETE POST
-  ====================================================== */
+  /* =========================
+     DELETE POST (SAFE)
+  ========================= */
   const deletePost = async () => {
+    if (!news?._id) return;
     if (!confirm("Delete this post permanently?")) return;
 
     try {
-      await api.deleteNews(id);
+      await api.deleteNews(news._id);
       router.push("/profile/posts");
     } catch {
       alert("Error deleting post");
     }
   };
 
-  /* ======================================================
+  /* =========================
      LOADING / NOT FOUND
-  ====================================================== */
+  ========================= */
   if (loadingNews) {
     return (
       <div style={{ textAlign: "center", marginTop: 80 }}>
@@ -173,9 +170,9 @@ export default function NewsView() {
     );
   }
 
-  /* ======================================================
-     OWNER / ADMIN CHECK
-  ====================================================== */
+  /* =========================
+     OWNER / ADMIN
+  ========================= */
   const isOwner =
     profile &&
     (profile._id === news.userId ||
@@ -183,9 +180,9 @@ export default function NewsView() {
 
   const isAdmin = profile?.role === "admin";
 
-  /* ======================================================
+  /* =========================
      LOCATION TEXT
-  ====================================================== */
+  ========================= */
   const locationText = [
     news.location?.village,
     news.location?.city,
@@ -197,9 +194,9 @@ export default function NewsView() {
 
   const pageTitle = `${news.headline} | TIMELINES`;
 
-  /* ======================================================
+  /* =========================
      UI
-  ====================================================== */
+  ========================= */
   return (
     <>
       <Head>
@@ -242,7 +239,9 @@ export default function NewsView() {
           <div style={styles.ownerRow}>
             <button
               style={styles.editBtn}
-              onClick={() => router.push(`/news/edit/${news._id}`)}
+              onClick={() =>
+                router.push(`/news/edit/${news._id}`)
+              }
             >
               ✏️ Edit
             </button>
@@ -289,9 +288,9 @@ export default function NewsView() {
   );
 }
 
-/* ======================================================
-   STYLES
-===================================================== */
+/* =========================
+   STYLES (UNCHANGED)
+========================= */
 const styles = {
   container: {
     maxWidth: 850,
