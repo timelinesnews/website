@@ -29,43 +29,49 @@ export default function EditProfile() {
   });
 
   /* ==========================================================
-     LOAD PROFILE
+     LOAD PROFILE (SAFE + NORMALIZED)
   ========================================================== */
   useEffect(() => {
-    loadProfile();
-  }, []);
+    let mounted = true;
 
-  async function loadProfile() {
-    try {
-      const profile = await api.getProfile();
-      if (!profile) {
+    async function loadProfile() {
+      try {
+        const res = await api.getProfile();
+        const u = res?.user || res;
+
+        if (!u || !mounted) {
+          router.replace("/login");
+          return;
+        }
+
+        let avatar = u.avatar || "";
+        if (avatar && !avatar.startsWith("http")) {
+          avatar = `${BACKEND}/${avatar.replace(/^\/+/, "")}`;
+        }
+
+        setForm({
+          name: u.name || "",
+          username: u.username || "",
+          country: u.country || "",
+          state: u.state || "",
+          city: u.city || "",
+          village: u.village || "",
+        });
+
+        setAvatarPreview(
+          avatar || "/default-user.png" // 🔥 FIX 404 avatar
+        );
+      } catch (err) {
+        console.error("Profile load error:", err);
         router.replace("/login");
-        return;
+      } finally {
+        mounted && setLoading(false);
       }
-
-      const u = profile.user || profile;
-
-      let avatar = u.avatar || "";
-      if (avatar && !avatar.startsWith("http")) {
-        avatar = `${BACKEND}/${avatar.replace(/^\/+/, "")}`;
-      }
-
-      setForm({
-        name: u.name || "",
-        username: u.username || "",
-        country: u.country || "",
-        state: u.state || "",
-        city: u.city || "",
-        village: u.village || "",
-      });
-
-      setAvatarPreview(avatar || "/user-avatar.png");
-    } catch (err) {
-      console.error("Profile load error:", err);
-    } finally {
-      setLoading(false);
     }
-  }
+
+    loadProfile();
+    return () => (mounted = false);
+  }, [router]);
 
   /* ==========================================================
      INPUT HANDLER
@@ -78,13 +84,23 @@ export default function EditProfile() {
   };
 
   /* ==========================================================
-     AVATAR CHANGE
+     AVATAR CHANGE (SAFE PREVIEW)
   ========================================================== */
   const handleAvatarChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (avatarPreview && avatarPreview.startsWith("blob:")) {
+    if (!file.type.startsWith("image/")) {
+      alert("Please select a valid image file");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Image must be under 5MB");
+      return;
+    }
+
+    if (avatarPreview?.startsWith("blob:")) {
       URL.revokeObjectURL(avatarPreview);
     }
 
@@ -96,13 +112,15 @@ export default function EditProfile() {
      SAVE PROFILE
   ========================================================== */
   const saveProfile = async () => {
+    if (saving) return;
+
     if (!form.name.trim()) {
-      alert("Name cannot be empty.");
+      alert("Name cannot be empty");
       return;
     }
 
     if (!form.username.trim()) {
-      alert("Username cannot be empty.");
+      alert("Username cannot be empty");
       return;
     }
 
@@ -110,20 +128,24 @@ export default function EditProfile() {
 
     try {
       const data = new FormData();
-      Object.keys(form).forEach((k) => data.append(k, form[k]));
+      Object.entries(form).forEach(([k, v]) =>
+        data.append(k, v)
+      );
       if (avatarFile) data.append("avatar", avatarFile);
 
       const res = await api.updateProfile(data);
 
-      if (res?.success) {
+      if (res?.success || res?.user) {
         alert("✅ Profile updated successfully!");
         router.push("/profile");
       } else {
-        alert("❌ " + (res?.message || "Update failed."));
+        alert(
+          "❌ " + (res?.message || "Update failed")
+        );
       }
     } catch (err) {
       console.error(err);
-      alert("❌ Error updating profile.");
+      alert("❌ Error updating profile");
     } finally {
       setSaving(false);
     }
@@ -144,7 +166,6 @@ export default function EditProfile() {
   ========================================================== */
   return (
     <>
-      {/* 🔍 SEO */}
       <Head>
         <title>Edit Profile | TIMELINES</title>
         <meta
@@ -154,8 +175,10 @@ export default function EditProfile() {
       </Head>
 
       <div style={styles.wrapper}>
-        {/* BACK */}
-        <button onClick={() => router.back()} style={styles.backBtn}>
+        <button
+          onClick={() => router.back()}
+          style={styles.backBtn}
+        >
           ← Back
         </button>
 
@@ -168,9 +191,16 @@ export default function EditProfile() {
               src={avatarPreview}
               style={styles.avatar}
               alt="Profile avatar"
+              onError={(e) => {
+                e.currentTarget.src =
+                  "/default-user.png";
+              }}
             />
 
-            <label htmlFor="avatarInput" style={styles.avatarEditBtn}>
+            <label
+              htmlFor="avatarInput"
+              style={styles.avatarEditBtn}
+            >
               ✏️
             </label>
 
@@ -192,7 +222,8 @@ export default function EditProfile() {
         {Object.keys(form).map((key) => (
           <div style={styles.formGroup} key={key}>
             <label style={styles.label}>
-              {key.charAt(0).toUpperCase() + key.slice(1)}
+              {key.charAt(0).toUpperCase() +
+                key.slice(1)}
             </label>
             <input
               style={styles.input}
@@ -206,14 +237,15 @@ export default function EditProfile() {
           </div>
         ))}
 
-        {/* SAVE */}
         <button
           onClick={saveProfile}
           disabled={saving}
           style={{
             ...styles.saveBtn,
             background: saving ? "#999" : "#4f46e5",
-            cursor: saving ? "not-allowed" : "pointer",
+            cursor: saving
+              ? "not-allowed"
+              : "pointer",
           }}
         >
           {saving ? "Saving…" : "💾 Save Changes"}
@@ -233,7 +265,6 @@ const styles = {
     padding: 20,
     fontFamily: "Inter, sans-serif",
   },
-
   backBtn: {
     background: "transparent",
     border: "none",
@@ -241,18 +272,15 @@ const styles = {
     cursor: "pointer",
     marginBottom: 15,
   },
-
   title: {
     fontSize: 26,
     fontWeight: 800,
     marginBottom: 20,
   },
-
   avatarSection: {
     textAlign: "center",
     marginBottom: 30,
   },
-
   avatar: {
     width: 120,
     height: 120,
@@ -260,7 +288,6 @@ const styles = {
     objectFit: "cover",
     border: "3px solid #ddd",
   },
-
   avatarEditBtn: {
     position: "absolute",
     bottom: 0,
@@ -272,23 +299,19 @@ const styles = {
     borderRadius: "50%",
     cursor: "pointer",
   },
-
   avatarInfo: {
     marginTop: 10,
     fontSize: 14,
     color: "#555",
   },
-
   formGroup: {
     marginBottom: 18,
   },
-
   label: {
     fontSize: 14,
     fontWeight: 600,
     color: "#555",
   },
-
   input: {
     width: "100%",
     padding: "12px",
@@ -299,7 +322,6 @@ const styles = {
     outline: "none",
     background: "#f9f9f9",
   },
-
   saveBtn: {
     width: "100%",
     marginTop: 25,
