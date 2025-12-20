@@ -2,36 +2,44 @@
 import React from "react";
 import Link from "next/link";
 
+/* 🔐 BACKEND */
 const BACKEND =
   process.env.NEXT_PUBLIC_BACKEND ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
   "https://backend-7752.onrender.com";
 
+/* =========================
+   URL NORMALIZER
+========================= */
+const fullUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith("http")) return url;
+  return `${BACKEND}/${url.replace(/^\/+/, "")}`;
+};
+
 export default function NewsCard({ item }) {
-  /* ======================================================
-     HARD SAFETY: VALID ID ONLY
-  ====================================================== */
-  const rawId = item?._id || item?.id;
-  if (!item || !rawId) {
-    console.warn("🚫 Dropped NewsCard without id:", item);
+  /* =========================
+     HARD SAFETY
+  ========================= */
+  if (!item) return null;
+
+  const newsId = item._id || item.id;
+  if (!newsId) {
+    console.warn("🚫 NewsCard skipped (no id)", item);
     return null;
   }
 
-  const newsId = String(rawId).trim();
+  /* =========================
+     IMAGE RESOLUTION (🔥 FIX)
+  ========================= */
+  const imageSrc =
+    fullUrl(item.photoUrl) ||               // 📰 news image
+    fullUrl(item.user?.profilePicture) ||   // 👤 author image
+    "/placeholder.jpg";                     // 🧱 fallback
 
-  /* ======================================================
-     IMAGE HANDLER
-  ====================================================== */
-  const fixImage = (url) => {
-    if (!url) return "/placeholder.jpg";
-    if (url.startsWith("http")) return url;
-    return `${BACKEND}/${url.replace(/^\/+/, "")}`;
-  };
-
-  const imageUrl = item.image || item.photoUrl;
-
-  /* ======================================================
-     LOCATION TEXT
-  ====================================================== */
+  /* =========================
+     LOCATION
+  ========================= */
   const locationText = [
     item?.location?.village,
     item?.location?.city,
@@ -41,22 +49,19 @@ export default function NewsCard({ item }) {
     .filter(Boolean)
     .join(", ");
 
-  /* ======================================================
-     CLEAN TEXT (NO HTML)
-  ====================================================== */
-  const cleanText = item?.content
-    ? String(item.content).replace(/<[^>]+>/g, "")
-    : "";
-
+  /* =========================
+     TEXT CLEAN
+  ========================= */
+  const cleanText = (item.content || "").replace(/<[^>]+>/g, "");
   const excerpt =
     cleanText.length > 140
       ? cleanText.slice(0, 140) + "…"
       : cleanText;
 
-  /* ======================================================
+  /* =========================
      DATE
-  ====================================================== */
-  const dateText = item?.createdAt
+  ========================= */
+  const dateText = item.createdAt
     ? new Date(item.createdAt).toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
@@ -64,18 +69,18 @@ export default function NewsCard({ item }) {
     })
     : "";
 
-  /* ======================================================
+  /* =========================
      UI
-  ====================================================== */
+  ========================= */
   return (
     <Link href={`/news/${newsId}`} legacyBehavior prefetch={false}>
       <a style={styles.card}>
         {/* IMAGE */}
         <img
-          src={fixImage(imageUrl)}
-          alt={item.headline || "News image"}
+          src={imageSrc}
+          alt={item.headline || "News"}
           loading="lazy"
-          style={styles.img}
+          style={styles.image}
           onError={(e) => {
             e.currentTarget.src = "/placeholder.jpg";
           }}
@@ -92,14 +97,12 @@ export default function NewsCard({ item }) {
           </h3>
 
           {locationText && (
-            <div style={styles.locationBadge}>
-              📍 {locationText}
-            </div>
+            <div style={styles.location}>📍 {locationText}</div>
           )}
 
           {excerpt && <p style={styles.desc}>{excerpt}</p>}
 
-          <div style={styles.metaRow}>
+          <div style={styles.meta}>
             <span>📅 {dateText}</span>
             <span>👁 {item.views ?? 0}</span>
           </div>
@@ -109,7 +112,9 @@ export default function NewsCard({ item }) {
   );
 }
 
-/* ====================== STYLES ====================== */
+/* =========================
+   STYLES
+========================= */
 const styles = {
   card: {
     display: "flex",
@@ -120,21 +125,19 @@ const styles = {
     boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
     textDecoration: "none",
     color: "#111",
-    cursor: "pointer",
-    transition: "transform 0.15s ease, box-shadow 0.15s ease",
+  },
+  image: {
+    width: 132,
+    height: 100,
+    borderRadius: 12,
+    objectFit: "cover",
+    background: "#f1f5f9",
+    flexShrink: 0,
   },
   content: {
     flex: 1,
     display: "flex",
     flexDirection: "column",
-  },
-  img: {
-    width: 132,
-    height: 100,
-    borderRadius: 12,
-    objectFit: "cover",
-    flexShrink: 0,
-    background: "#f1f5f9",
   },
   category: {
     background: "#eef2ff",
@@ -143,23 +146,22 @@ const styles = {
     fontSize: 12,
     fontWeight: 700,
     color: "#4f46e5",
-    marginBottom: 6,
     width: "fit-content",
+    marginBottom: 6,
   },
   headline: {
-    margin: "2px 0",
     fontSize: 17,
     fontWeight: 700,
     lineHeight: 1.35,
+    margin: "2px 0",
   },
-  locationBadge: {
+  location: {
     marginTop: 6,
     background: "#e7f5ff",
     color: "#1c7ed6",
     padding: "4px 10px",
     borderRadius: 8,
     fontSize: 13,
-    fontWeight: 600,
     width: "fit-content",
   },
   desc: {
@@ -168,13 +170,11 @@ const styles = {
     color: "#475569",
     lineHeight: 1.45,
   },
-  metaRow: {
+  meta: {
     marginTop: "auto",
-    paddingTop: 10,
     fontSize: 12,
     color: "#64748b",
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
   },
 };
