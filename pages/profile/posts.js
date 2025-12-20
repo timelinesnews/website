@@ -41,7 +41,6 @@ export default function MyPosts() {
 
       /* ---------- NEWS ---------- */
       const newsRes = await api.getNews();
-
       const allNews =
         newsRes?.news ||
         newsRes?.data ||
@@ -59,10 +58,11 @@ export default function MyPosts() {
             p?.createdBy?._id ||
             p?.author?._id ||
             p?.userId ||
+            p?.user?._id ||
             null;
 
           if (postUserId) {
-            return postUserId === user._id;
+            return String(postUserId) === String(user._id);
           }
 
           if (p?.username && user?.username) {
@@ -85,7 +85,7 @@ export default function MyPosts() {
 
           return {
             ...p,
-            _id: String(realId), // 🔥 FORCE ID
+            _id: String(realId), // 🔥 FORCE STRING ID
           };
         })
         .filter(Boolean);
@@ -100,11 +100,19 @@ export default function MyPosts() {
   };
 
   /* ======================================================
-     IMAGE FIX
+     IMAGE FIX (MAIN FIX)
   ====================================================== */
-  const fixImage = (img) => {
-    if (!img) return "/default-user.png";
+  const fixImage = (post) => {
+    const img =
+      post?.photoUrl ||
+      post?.image ||
+      post?.cover ||
+      post?.thumbnail ||
+      null;
+
+    if (!img) return "/placeholder.jpg";
     if (img.startsWith("http")) return img;
+
     return `${BACKEND}/${img.replace(/^\/+/, "")}`;
   };
 
@@ -164,11 +172,14 @@ export default function MyPosts() {
           {posts.map((post) => (
             <div key={post._id} style={styles.card}>
               <img
-                src={fixImage(post.image)}
+                src={fixImage(post)}
                 alt={post.headline}
                 loading="lazy"
                 style={styles.image}
                 onClick={() => openPost(post)}
+                onError={(e) => {
+                  e.currentTarget.src = "/placeholder.jpg";
+                }}
               />
 
               <div style={{ flex: 1 }}>

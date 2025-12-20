@@ -25,7 +25,7 @@ export default function NewsView() {
   const [msg, setMsg] = useState("");
 
   /* =========================
-     NORMALIZE NEWS ID
+     SAFE NEWS ID
   ========================= */
   const safeId =
     typeof id === "string" && id !== "undefined" && id !== "null"
@@ -45,7 +45,7 @@ export default function NewsView() {
   }, []);
 
   /* =========================
-     LOAD NEWS (HARD SAFE)
+     LOAD NEWS
   ========================= */
   const loadNews = useCallback(async () => {
     if (!safeId) {
@@ -59,18 +59,15 @@ export default function NewsView() {
 
     try {
       const res = await api.getNewsById(safeId);
+      const data = res?.data || res || null;
 
-      const safeNews =
-        res?.news || res?.data?.news || res?.data || res || null;
-
-      if (!safeNews || !(safeNews._id || safeNews.id)) {
-        console.warn("⚠️ Invalid news payload:", res);
+      if (!data || !(data._id || data.id)) {
         setNews(null);
         setMsg("News not found");
       } else {
         setNews({
-          ...safeNews,
-          _id: safeNews._id || safeNews.id,
+          ...data,
+          _id: data._id || data.id,
         });
       }
     } catch (err) {
@@ -87,7 +84,6 @@ export default function NewsView() {
   ========================= */
   const loadComments = useCallback(async (newsId) => {
     if (!newsId) return;
-
     setLoadingComments(true);
     try {
       const list = await api.getComments(newsId);
@@ -108,45 +104,21 @@ export default function NewsView() {
     loadNews();
   }, [safeId, loadProfile, loadNews]);
 
-  /* =========================
-     LOAD COMMENTS AFTER NEWS
-  ========================= */
   useEffect(() => {
-    if (!news?._id) return;
-    loadComments(news._id);
+    if (news?._id) loadComments(news._id);
   }, [news?._id, loadComments]);
 
   /* =========================
-     COMMENT ACTIONS
+     IMAGE HELPERS (FIXED)
   ========================= */
-  const handlePostComment = async (text) => {
-    if (!news?._id) return;
-    try {
-      const res = await api.addComment(news._id, text);
-      if (!res?.error) loadComments(news._id);
-      else alert("❌ Failed to post comment");
-    } catch {
-      alert("Error posting comment");
-    }
-  };
+  const getNewsImage = () => {
+    if (!news?.photoUrl) return "/placeholder.jpg";
 
-  const handleDeleteComment = async (commentId) => {
-    if (!news?._id) return;
-    try {
-      await api.deleteComment(news._id, commentId);
-      setComments((prev) => prev.filter((c) => c._id !== commentId));
-    } catch {
-      alert("Error deleting comment");
+    if (news.photoUrl.startsWith("http")) {
+      return news.photoUrl; // Cloudinary
     }
-  };
 
-  /* =========================
-     IMAGE FIX
-  ========================= */
-  const fixURL = (url) => {
-    if (!url) return "/default-user.png";
-    if (url.startsWith("http")) return url;
-    return `${BACKEND}/${url.replace(/^\//, "")}`;
+    return `${BACKEND}/${news.photoUrl.replace(/^\/+/, "")}`; // backend image
   };
 
   /* =========================
@@ -155,7 +127,6 @@ export default function NewsView() {
   const deletePost = async () => {
     if (!news?._id) return;
     if (!confirm("Delete this post permanently?")) return;
-
     try {
       await api.deleteNews(news._id);
       router.push("/profile/posts");
@@ -182,13 +153,11 @@ export default function NewsView() {
   /* =========================
      OWNER / ADMIN
   ========================= */
-  const isOwner =
-    profile && profile._id === news.user?._id;
-
+  const isOwner = profile && profile._id === news.user?.id;
   const isAdmin = profile?.role === "admin";
 
   /* =========================
-     LOCATION TEXT
+     LOCATION
   ========================= */
   const locationText = [
     news.location?.village,
@@ -223,13 +192,15 @@ export default function NewsView() {
           )}
         </div>
 
-        {(news.photoUrl || news.image) && (
-          <img
-            src={fixURL(news.photoUrl || news.image)}
-            alt={news.headline}
-            style={styles.mainImage}
-          />
-        )}
+        {/* NEWS IMAGE */}
+        <img
+          src={getNewsImage()}
+          alt={news.headline}
+          style={styles.mainImage}
+          onError={(e) => {
+            e.currentTarget.src = "/placeholder.jpg";
+          }}
+        />
 
         <div style={styles.metaRow}>
           <span>
@@ -249,7 +220,6 @@ export default function NewsView() {
             >
               ✏️ Edit
             </button>
-
             <button style={styles.deleteBtn} onClick={deletePost}>
               🗑 Delete
             </button>
@@ -264,7 +234,10 @@ export default function NewsView() {
         <h2 style={{ marginTop: 40 }}>Comments</h2>
 
         {profile ? (
-          <CommentBox onSubmit={handlePostComment} />
+          <CommentBox
+            newsId={news._id}
+            onSubmit={() => loadComments(news._id)}
+          />
         ) : (
           <p style={{ color: "#888" }}>
             <Link href="/login">Sign in</Link> to comment.
@@ -278,7 +251,7 @@ export default function NewsView() {
         ) : (
           <CommentList
             comments={comments}
-            onDelete={handleDeleteComment}
+            onDelete={() => loadComments(news._id)}
             userId={profile?._id}
           />
         )}
