@@ -25,6 +25,14 @@ export default function NewsView() {
   const [msg, setMsg] = useState("");
 
   /* =========================
+     NORMALIZE NEWS ID
+  ========================= */
+  const safeId =
+    typeof id === "string" && id !== "undefined" && id !== "null"
+      ? id
+      : null;
+
+  /* =========================
      LOAD PROFILE
   ========================= */
   const loadProfile = useCallback(async () => {
@@ -37,16 +45,20 @@ export default function NewsView() {
   }, []);
 
   /* =========================
-     LOAD NEWS (SAFE)
+     LOAD NEWS (HARD SAFE)
   ========================= */
   const loadNews = useCallback(async () => {
-    if (!id) return;
+    if (!safeId) {
+      setMsg("❌ Invalid news link");
+      setLoadingNews(false);
+      return;
+    }
 
     setLoadingNews(true);
     setMsg("");
 
     try {
-      const res = await api.getNewsById(id);
+      const res = await api.getNewsById(safeId);
 
       const safeNews =
         res?.news || res?.data?.news || res?.data || res || null;
@@ -65,10 +77,10 @@ export default function NewsView() {
       console.error("Load news error:", err);
       setMsg("❌ Failed to load news");
       setNews(null);
+    } finally {
+      setLoadingNews(false);
     }
-
-    setLoadingNews(false);
-  }, [id]);
+  }, [safeId]);
 
   /* =========================
      LOAD COMMENTS
@@ -82,18 +94,19 @@ export default function NewsView() {
       setComments(Array.isArray(list) ? list : []);
     } catch {
       setComments([]);
+    } finally {
+      setLoadingComments(false);
     }
-    setLoadingComments(false);
   }, []);
 
   /* =========================
      INITIAL LOAD
   ========================= */
   useEffect(() => {
-    if (!id) return;
+    if (!safeId) return;
     loadProfile();
     loadNews();
-  }, [id, loadProfile, loadNews]);
+  }, [safeId, loadProfile, loadNews]);
 
   /* =========================
      LOAD COMMENTS AFTER NEWS
@@ -101,7 +114,7 @@ export default function NewsView() {
   useEffect(() => {
     if (!news?._id) return;
     loadComments(news._id);
-  }, [news, loadComments]);
+  }, [news?._id, loadComments]);
 
   /* =========================
      COMMENT ACTIONS
@@ -210,9 +223,9 @@ export default function NewsView() {
           )}
         </div>
 
-        {news.photoUrl && (
+        {(news.photoUrl || news.image) && (
           <img
-            src={fixURL(news.photoUrl)}
+            src={fixURL(news.photoUrl || news.image)}
             alt={news.headline}
             style={styles.mainImage}
           />
