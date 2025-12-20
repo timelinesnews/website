@@ -12,10 +12,10 @@ import StateSelect from "../components/location/StateSelect";
 import CitySelect from "../components/location/CitySelect";
 import VillageSelect from "../components/location/VillageSelect";
 
-/* 🔐 BACKEND URL (safe for local + vercel) */
+/* 🔐 BACKEND URL (single source of truth) */
 const BACKEND =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  process.env.NEXT_PUBLIC_BACKEND ||
   "https://backend-7752.onrender.com";
 
 export default function Home() {
@@ -32,16 +32,23 @@ export default function Home() {
 
   /* ========================= LOAD SAVED LOCATION ========================= */
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("tl_location") || "{}");
+    if (typeof window === "undefined") return;
 
-    setCountry(saved.country || "");
-    setStateCode(saved.state || "");
-    setCityName(saved.city || "");
-    setVillage(saved.village || "");
+    try {
+      const saved = JSON.parse(localStorage.getItem("tl_location") || "{}");
+      setCountry(saved.country || "");
+      setStateCode(saved.state || "");
+      setCityName(saved.city || "");
+      setVillage(saved.village || "");
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   /* ========================= SAVE LOCATION ========================= */
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
     localStorage.setItem(
       "tl_location",
       JSON.stringify({
@@ -56,10 +63,10 @@ export default function Home() {
   /* ========================= LOAD NEWS ========================= */
   const loadNews = useCallback(async () => {
     setLoading(true);
+
     try {
       const data = await api.getNews();
 
-      // ✅ HARD FILTER: never allow news without _id
       const safeData = Array.isArray(data)
         ? data.filter((n) => {
             if (!n?._id) {
@@ -71,10 +78,11 @@ export default function Home() {
         : [];
 
       setNews(safeData);
-    } catch {
-      console.warn("Failed to load news.");
+    } catch (err) {
+      console.warn("Failed to load news:", err);
       setNews([]);
     }
+
     setLoading(false);
   }, []);
 
@@ -84,12 +92,14 @@ export default function Home() {
   }, [loadNews, country, stateCode, cityName, village]);
 
   /* ========================= FIX IMAGE ========================= */
-  const fixImage = (url) =>
-    !url
-      ? "/placeholder.jpg"
-      : url.startsWith("http")
-      ? url
-      : `${BACKEND}/${url.replace(/^\//, "")}`;
+  const fixImage = useCallback(
+    (url) => {
+      if (!url) return "/placeholder.jpg";
+      if (url.startsWith("http")) return url;
+      return `${BACKEND}/${url.replace(/^\//, "")}`;
+    },
+    []
+  );
 
   /* ========================= AUTO LOCATION ========================= */
   const autoLocate = async () => {
@@ -104,8 +114,9 @@ export default function Home() {
       setVillage("");
     } catch {
       alert("Location auto-detect failed.");
+    } finally {
+      setDetecting(false);
     }
-    setDetecting(false);
   };
 
   /* ========================= LOCATION CHANGES ========================= */
