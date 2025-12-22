@@ -19,12 +19,10 @@ const BACKEND =
   "https://backend-7752.onrender.com";
 
 export default function Home() {
-  /* ========================= STATES ========================= */
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("All");
 
-  // location (OPTIONAL filter)
   const [country, setCountry] = useState("");
   const [stateCode, setStateCode] = useState("");
   const [cityName, setCityName] = useState("");
@@ -57,26 +55,25 @@ export default function Home() {
     );
   }, [country, stateCode, cityName, village]);
 
-  /* ========================= LOAD NEWS (GLOBAL) ========================= */
+  /* ========================= LOAD NEWS (FIXED) ========================= */
   const loadNews = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get("/news");
 
-      // ✅ HANDLE ALL RESPONSE SHAPES
-      const list = Array.isArray(res)
-        ? res
-        : Array.isArray(res?.data)
-          ? res.data
-          : [];
+      // ✅ CORRECT DATA EXTRACTION (THIS WAS THE BUG)
+      const list = Array.isArray(res?.data?.data)
+        ? res.data.data
+        : [];
 
-      if (list.length === 0) {
+      console.log("NEWS FROM API:", list); // 👈 debug
+
+      if (!list.length) {
         setNews([]);
         setLoading(false);
         return;
       }
 
-      // 🔥 GLOBAL SORT = MOST VIEWED FIRST
       const sorted = list
         .filter((n) => n && n._id)
         .sort(
@@ -85,9 +82,9 @@ export default function Home() {
             new Date(b.createdAt) - new Date(a.createdAt)
         );
 
-      setNews(sorted.length ? sorted : list);
+      setNews(sorted);
     } catch (err) {
-      console.warn("Failed to load news:", err);
+      console.error("Failed to load news:", err);
       setNews([]);
     }
     setLoading(false);
@@ -98,11 +95,11 @@ export default function Home() {
   }, [loadNews]);
 
   /* ========================= IMAGE FIX ========================= */
-  const fixImage = useCallback((url) => {
+  const fixImage = (url) => {
     if (!url) return "/placeholder.jpg";
     if (url.startsWith("http")) return url;
     return `${BACKEND}/${url.replace(/^\//, "")}`;
-  }, []);
+  };
 
   /* ========================= AUTO LOCATION ========================= */
   const autoLocate = async () => {
@@ -140,7 +137,7 @@ export default function Home() {
           activeCategory.toLowerCase()
       );
 
-  // 🛟 FINAL FALLBACK: LAST POST MUST SHOW
+  // 🛟 FALLBACK: AT LEAST ONE POST
   const finalNews =
     categoryFiltered.length > 0
       ? categoryFiltered
@@ -150,7 +147,6 @@ export default function Home() {
 
   const trendingNews = news.slice(0, 10);
 
-  /* ========================= LOADING ========================= */
   if (loading) {
     return (
       <div style={styles.loadingBox}>
@@ -159,7 +155,6 @@ export default function Home() {
     );
   }
 
-  /* ========================= UI ========================= */
   return (
     <div style={styles.container}>
       {/* ⭐ LOCATION BAR */}
@@ -227,7 +222,7 @@ export default function Home() {
         setActive={setActiveCategory}
       />
 
-      {/* 📰 NEWS LIST */}
+      {/* 📰 NEWS */}
       <h2
         style={{
           ...styles.heading,
