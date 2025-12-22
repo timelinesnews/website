@@ -9,7 +9,6 @@ export default function ProfilePage() {
   const [user, setUser] = useState(null);
   const [myPosts, setMyPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [tab, setTab] = useState("posts"); // posts | followers | following
 
   /* ================= LOAD PROFILE ================= */
@@ -85,41 +84,47 @@ export default function ProfilePage() {
   const postsCount = myPosts.length;
   const followersCount = Array.isArray(user.followers)
     ? user.followers.length
-    : user.followers || 0;
+    : Number(user.followers || 0);
   const followingCount = Array.isArray(user.following)
     ? user.following.length
-    : user.following || 0;
+    : Number(user.following || 0);
 
   /* ================= POST CARD ================= */
   const PostCard = ({ item }) => (
-    <div style={styles.postCard}>
-      <h3
-        style={styles.postTitle}
-        onClick={() => router.push(`/news/${item._id}`)}
-      >
-        {item.headline}
-      </h3>
+    <div
+      style={styles.postCard}
+      onClick={() => router.push(`/news/${item._id}`)}
+    >
+      <h3 style={styles.postTitle}>{item.headline}</h3>
     </div>
   );
 
-  /* ================= USER ROW (followers/following) ================= */
-  const UserRow = ({ u }) => (
-    <div style={styles.userRow}>
-      <img
-        src={u?.profilePicture || "/default-user.png"}
-        alt={u?.username}
-        style={styles.userAvatar}
-      />
-      <div>
-        <div style={{ fontWeight: 700 }}>
-          {u?.firstName} {u?.lastName}
-        </div>
-        <div style={{ fontSize: 13, color: "#666" }}>
-          @{u?.username}
+  /* ================= USER ROW ================= */
+  const UserRow = ({ u }) => {
+    if (!u) return null;
+
+    return (
+      <div style={styles.userRow}>
+        <img
+          src={u.profilePicture || "/default-user.png"}
+          alt={u.username}
+          style={styles.userAvatar}
+          onError={(e) => (e.currentTarget.src = "/default-user.png")}
+        />
+        <div>
+          <div style={{ fontWeight: 700 }}>
+            {u.firstName || ""} {u.lastName || ""}
+            {u.verified && (
+              <span style={{ marginLeft: 6, color: "#3b82f6" }}>✔️</span>
+            )}
+          </div>
+          <div style={{ fontSize: 13, color: "#666" }}>
+            @{u.username}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <>
@@ -142,24 +147,62 @@ export default function ProfilePage() {
 
           <div style={styles.name}>
             {user.firstName} {user.lastName}
+            {user.verified && (
+              <span style={{ marginLeft: 6, color: "#3b82f6" }}>✔️</span>
+            )}
           </div>
+
           <div style={styles.username}>@{user.username}</div>
+
+          {user.bio && (
+            <p style={styles.bio}>{user.bio}</p>
+          )}
 
           <div style={styles.location}>
             📍 {user.city}, {user.state}, {user.country}
           </div>
 
-          {/* ===== METERS ===== */}
+          {user.createdAt && (
+            <div style={styles.memberSince}>
+              Member since{" "}
+              {new Date(user.createdAt).toLocaleDateString("en-IN", {
+                month: "short",
+                year: "numeric",
+              })}
+            </div>
+          )}
+
+          {/* ===== STATS ===== */}
           <div style={styles.statsRow}>
-            <div onClick={() => setTab("posts")} style={styles.statBox}>
+            <div
+              onClick={() => setTab("posts")}
+              style={{
+                ...styles.statBox,
+                ...(tab === "posts" ? styles.activeStat : {}),
+              }}
+            >
               <b>{postsCount}</b>
               <span>Posts</span>
             </div>
-            <div onClick={() => setTab("followers")} style={styles.statBox}>
+
+            <div
+              onClick={() => setTab("followers")}
+              style={{
+                ...styles.statBox,
+                ...(tab === "followers" ? styles.activeStat : {}),
+              }}
+            >
               <b>{followersCount}</b>
               <span>Followers</span>
             </div>
-            <div onClick={() => setTab("following")} style={styles.statBox}>
+
+            <div
+              onClick={() => setTab("following")}
+              style={{
+                ...styles.statBox,
+                ...(tab === "following" ? styles.activeStat : {}),
+              }}
+            >
               <b>{followingCount}</b>
               <span>Following</span>
             </div>
@@ -186,39 +229,26 @@ export default function ProfilePage() {
 
         {/* ===== TABS CONTENT ===== */}
         <div style={{ marginTop: 24 }}>
-          {tab === "posts" && (
-            <>
-              {myPosts.length === 0 ? (
-                <div style={styles.empty}>No posts yet.</div>
-              ) : (
-                myPosts.map((p) => <PostCard key={p._id} item={p} />)
-              )}
-            </>
-          )}
+          {tab === "posts" &&
+            (myPosts.length === 0 ? (
+              <div style={styles.empty}>No posts yet.</div>
+            ) : (
+              myPosts.map((p) => <PostCard key={p._id} item={p} />)
+            ))}
 
-          {tab === "followers" && (
-            <>
-              {followersCount === 0 ? (
-                <div style={styles.empty}>No followers yet.</div>
-              ) : (
-                user.followers.map((u, i) => (
-                  <UserRow key={i} u={u} />
-                ))
-              )}
-            </>
-          )}
+          {tab === "followers" &&
+            (followersCount === 0 ? (
+              <div style={styles.empty}>No followers yet.</div>
+            ) : (
+              user.followers.map((u, i) => <UserRow key={i} u={u} />)
+            ))}
 
-          {tab === "following" && (
-            <>
-              {followingCount === 0 ? (
-                <div style={styles.empty}>Not following anyone.</div>
-              ) : (
-                user.following.map((u, i) => (
-                  <UserRow key={i} u={u} />
-                ))
-              )}
-            </>
-          )}
+          {tab === "following" &&
+            (followingCount === 0 ? (
+              <div style={styles.empty}>Not following anyone.</div>
+            ) : (
+              user.following.map((u, i) => <UserRow key={i} u={u} />)
+            ))}
         </div>
       </div>
     </>
@@ -248,7 +278,15 @@ const styles = {
   },
   name: { fontSize: 23, fontWeight: 800 },
   username: { color: "#777" },
+  bio: {
+    fontSize: 14,
+    color: "#444",
+    marginTop: 6,
+    maxWidth: 520,
+    marginInline: "auto",
+  },
   location: { fontSize: 14, color: "#555", marginTop: 4 },
+  memberSince: { fontSize: 12, color: "#777", marginTop: 4 },
 
   statsRow: {
     display: "flex",
@@ -258,6 +296,10 @@ const styles = {
   statBox: {
     cursor: "pointer",
     textAlign: "center",
+    paddingBottom: 6,
+  },
+  activeStat: {
+    borderBottom: "2px solid #2563eb",
   },
 
   btnRow: {
