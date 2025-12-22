@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { api } from "../services/api";
+import { api, getAuthToken } from "../services/api";
 
 const BACKEND =
   process.env.NEXT_PUBLIC_BACKEND ||
@@ -15,23 +15,35 @@ export default function Navbar() {
   const [dropdown, setDropdown] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [profileError, setProfileError] = useState(false); // 🛡 NEW
 
   const dropdownRef = useRef(null);
 
   /* =========================
-     LOAD PROFILE (SAFE)
+     LOAD PROFILE (HARD SAFE)
   ========================= */
   useEffect(() => {
     let active = true;
 
     const loadProfile = async () => {
       try {
+        setProfileError(false);
+
+        // 🛑 NO TOKEN → DO NOT CALL API
+        if (!getAuthToken()) {
+          setLoadingProfile(false);
+          return;
+        }
+
         const res = await api.getProfile();
         if (!active) return;
 
         const user = res?.user || res;
+
+        // ❌ PROFILE FAIL ≠ LOGOUT
         if (!user) {
-          setProfile(null);
+          console.warn("Profile API returned empty, keeping user logged in");
+          setProfileError(true);
           return;
         }
 
@@ -49,7 +61,8 @@ export default function Navbar() {
 
         setProfile(fixedUser);
       } catch (err) {
-        setProfile(null);
+        console.warn("Profile load failed, token preserved");
+        setProfileError(true);
       } finally {
         active && setLoadingProfile(false);
       }
@@ -175,7 +188,7 @@ export default function Navbar() {
 
           {dropdown && (
             <div style={styles.dropdownMenu}>
-              {profile ? (
+              {getAuthToken() ? (
                 <>
                   <Link href="/profile" legacyBehavior>
                     <a style={styles.dropdownItem}>Profile</a>
