@@ -41,7 +41,7 @@ export const getAdminToken = () => {
 };
 
 /* ======================================================
-   🛡 HARD BLOCK + AUTH ATTACH
+   🛡 REQUEST INTERCEPTOR
 ====================================================== */
 instance.interceptors.request.use(
   (config) => {
@@ -72,7 +72,7 @@ instance.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err?.response?.status === 401) {
-      console.warn("⚠️ 401 received (token kept, no logout)");
+      console.warn("⚠️ 401 received (token preserved)");
     }
     return Promise.reject(err);
   }
@@ -99,21 +99,44 @@ export const api = {
     if (!idToken) return { error: "Missing token" };
     try {
       const res = await instance.post("/auth/firebase-login", { idToken });
-      if (res?.data?.token) setAuthToken(res.data.token);
-      return safe(res);
+      const data = res?.data;
+
+      const token =
+        data?.token ||
+        data?.data?.token ||
+        data?.accessToken;
+
+      if (token) setAuthToken(token);
+      else console.error("❌ Firebase login: token missing", data);
+
+      return data;
     } catch (err) {
       return { error: errOut(err) };
     }
   },
 
   /* ============================
-       👤 BASIC AUTH
+       👤 BASIC AUTH (FIXED)
   ============================ */
   login: async (payload) => {
     try {
       const res = await instance.post("/auth/login", payload);
-      if (res?.data?.token) setAuthToken(res.data.token);
-      return safe(res);
+      const data = res?.data;
+
+      // ✅ SUPPORT ALL RESPONSE SHAPES
+      const token =
+        data?.token ||
+        data?.data?.token ||
+        data?.accessToken;
+
+      if (token) {
+        setAuthToken(token);
+      } else {
+        console.error("❌ Login success but token missing", data);
+        return { error: { message: "Login token missing" } };
+      }
+
+      return data;
     } catch (err) {
       return { error: errOut(err) };
     }
@@ -134,14 +157,14 @@ export const api = {
   },
 
   /* ============================
-       👤 PROFILE (SAFE)
+       👤 PROFILE
   ============================ */
   getProfile: async () => {
     try {
       const res = await instance.get("/auth/me");
       return safe(res);
-    } catch (err) {
-      console.warn("Profile load failed, token preserved");
+    } catch {
+      console.warn("Profile load failed, token kept");
       return null;
     }
   },
@@ -196,7 +219,7 @@ export const api = {
   },
 
   /* ============================
-       📰 NEWS (NEVER BLANK)
+       📰 NEWS
   ============================ */
   getNews: async (params = {}) => {
     try {
