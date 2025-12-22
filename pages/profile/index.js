@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { api, getAuthToken } from "../../services/api";
+import { api } from "../../services/api";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -10,14 +10,15 @@ export default function ProfilePage() {
   const [myPosts, setMyPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  /* ================= LOAD PROFILE (STABLE) ================= */
+  /* ================= LOAD PROFILE (FINAL & SAFE) ================= */
   const loadProfile = useCallback(async () => {
     try {
+      // 🔐 ALWAYS VERIFY SESSION FROM BACKEND
       const profileRes = await api.getProfile();
-      const u = profileRes?.user || profileRes;
+      const u = profileRes?.data || profileRes;
 
       if (!u || !u._id) {
-        setLoading(false);
+        router.replace("/login");
         return;
       }
 
@@ -30,11 +31,12 @@ export default function ProfilePage() {
         setMyPosts([]);
       }
     } catch (err) {
-      console.warn("Profile load skipped:", err?.message);
+      console.warn("Profile auth failed:", err?.message);
+      router.replace("/login");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     loadProfile();
@@ -43,61 +45,54 @@ export default function ProfilePage() {
   /* ================= LOGOUT ================= */
   const logoutUser = () => {
     api.logout();
-    router.push("/login");
+    router.replace("/login");
   };
 
   /* ================= POST CARD ================= */
-  const PostCard = ({ item }) => {
-    return (
-      <div style={styles.postCard}>
-        <h3
-          style={styles.postTitle}
-          onClick={() => router.push(`/news/${item._id}`)}
+  const PostCard = ({ item }) => (
+    <div style={styles.postCard}>
+      <h3
+        style={styles.postTitle}
+        onClick={() => router.push(`/news/${item._id}`)}
+      >
+        {item.headline}
+      </h3>
+
+      {item.photoUrl && (
+        <img
+          src={item.photoUrl}
+          alt={item.headline}
+          loading="lazy"
+          style={styles.postImage}
+          onError={(e) => (e.currentTarget.style.display = "none")}
+        />
+      )}
+
+      <p style={styles.postDesc}>
+        {(item.content || "").replace(/<[^>]+>/g, "").slice(0, 120)}…
+      </p>
+
+      <div style={styles.actionRow}>
+        <button
+          style={styles.editBtn}
+          onClick={() => router.push(`/news/edit/${item._id}`)}
         >
-          {item.headline}
-        </h3>
+          ✏️ Edit
+        </button>
 
-        {item.photoUrl && (
-          <img
-            src={item.photoUrl}
-            alt={item.headline}
-            loading="lazy"
-            style={styles.postImage}
-            onError={(e) => (e.currentTarget.style.display = "none")}
-          />
-        )}
-
-        <p style={styles.postDesc}>
-          {(item.content || "")
-            .replace(/<[^>]+>/g, "")
-            .slice(0, 120)}
-          …
-        </p>
-
-        <div style={styles.actionRow}>
-          <button
-            style={styles.editBtn}
-            onClick={() => router.push(`/news/edit/${item._id}`)}
-          >
-            ✏️ Edit
-          </button>
-
-          <button
-            style={styles.deleteBtn}
-            onClick={async () => {
-              if (!confirm("Delete this post?")) return;
-              await api.delete(`/news/${item._id}`);
-              setMyPosts((prev) =>
-                prev.filter((p) => p._id !== item._id)
-              );
-            }}
-          >
-            🗑️ Delete
-          </button>
-        </div>
+        <button
+          style={styles.deleteBtn}
+          onClick={async () => {
+            if (!confirm("Delete this post?")) return;
+            await api.delete(`/news/${item._id}`);
+            setMyPosts((prev) => prev.filter((p) => p._id !== item._id));
+          }}
+        >
+          🗑️ Delete
+        </button>
       </div>
-    );
-  };
+    </div>
+  );
 
   /* ================= STATES ================= */
 
@@ -105,22 +100,8 @@ export default function ProfilePage() {
     return <div style={styles.loading}>⏳ Loading profile…</div>;
   }
 
-  // 🔑 USER NOT LOADED → SHOW LOGIN PROMPT (NOT BLANK)
-  if (!user) {
-    return (
-      <div style={styles.loading}>
-        <p style={{ marginBottom: 16 }}>
-          You need to log in to view your profile.
-        </p>
-        <button
-          style={styles.btn}
-          onClick={() => router.push("/login")}
-        >
-          🔐 Go to Login
-        </button>
-      </div>
-    );
-  }
+  // ⚠️ SHOULD NEVER HIT (failsafe)
+  if (!user) return null;
 
   return (
     <>
@@ -138,9 +119,7 @@ export default function ProfilePage() {
             src={user.profilePicture || "/default-user.png"}
             alt={user.username}
             style={styles.avatar}
-            onError={(e) =>
-              (e.currentTarget.src = "/default-user.png")
-            }
+            onError={(e) => (e.currentTarget.src = "/default-user.png")}
           />
 
           <div style={styles.name}>
@@ -162,11 +141,7 @@ export default function ProfilePage() {
 
             <button
               onClick={logoutUser}
-              style={{
-                ...styles.btn,
-                background: "#ffe5e5",
-                color: "#c00",
-              }}
+              style={{ ...styles.btn, background: "#ffe5e5", color: "#c00" }}
             >
               🚪 Logout
             </button>
@@ -180,9 +155,7 @@ export default function ProfilePage() {
             You haven't posted anything yet.
           </div>
         ) : (
-          myPosts.map((item) => (
-            <PostCard key={item._id} item={item} />
-          ))
+          myPosts.map((item) => <PostCard key={item._id} item={item} />)
         )}
       </div>
     </>
