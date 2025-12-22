@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { api } from "../services/api";
+import { api, getAuthToken } from "../services/api";
 
 const BACKEND =
   process.env.NEXT_PUBLIC_BACKEND ||
@@ -17,14 +17,33 @@ export default function Navbar() {
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   const dropdownRef = useRef(null);
+  const fetchedOnce = useRef(false); // 🔑 PREVENT MULTIPLE CALLS
 
   /* =========================
-     LOAD PROFILE (DISPLAY ONLY)
+     LOAD PROFILE (DISPLAY ONLY – RATE LIMIT SAFE)
   ========================= */
   useEffect(() => {
     let active = true;
 
     const loadProfile = async () => {
+      // ❌ no token → no API call
+      if (!getAuthToken()) {
+        setLoadingProfile(false);
+        return;
+      }
+
+      // 🔁 already fetched → use cache
+      if (fetchedOnce.current) {
+        const cached = localStorage.getItem("tl_profile");
+        if (cached) {
+          try {
+            setProfile(JSON.parse(cached));
+          } catch { }
+        }
+        setLoadingProfile(false);
+        return;
+      }
+
       try {
         const res = await api.getProfile();
         if (!active) return;
@@ -36,6 +55,7 @@ export default function Navbar() {
         }
 
         const fixedUser = { ...user };
+
         if (
           fixedUser.profilePicture &&
           !fixedUser.profilePicture.startsWith("http")
@@ -47,8 +67,10 @@ export default function Navbar() {
         }
 
         setProfile(fixedUser);
+        localStorage.setItem("tl_profile", JSON.stringify(fixedUser));
+        fetchedOnce.current = true;
       } catch {
-        // ❗ ignore (guest user)
+        // ❗ ignore errors (no logout)
       } finally {
         active && setLoadingProfile(false);
       }
@@ -96,7 +118,9 @@ export default function Navbar() {
     try {
       await api.logout();
     } catch { }
+    localStorage.removeItem("tl_profile");
     setProfile(null);
+    fetchedOnce.current = false;
     router.replace("/login");
   };
 
@@ -254,7 +278,7 @@ export default function Navbar() {
 }
 
 /* =========================
-   STYLES
+   STYLES (UNCHANGED)
 ========================= */
 const styles = {
   navbar: {
@@ -319,7 +343,6 @@ const styles = {
   dropdownItem: {
     padding: "12px 14px",
     display: "block",
-    textDecoration: "none",
     color: "#111",
     borderBottom: "1px solid #eee",
     background: "transparent",
