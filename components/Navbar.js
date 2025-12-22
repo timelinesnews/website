@@ -17,39 +17,28 @@ export default function Navbar() {
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   const dropdownRef = useRef(null);
-  const fetchedOnce = useRef(false); // 🔑 PREVENT MULTIPLE CALLS
 
   /* =========================
-     LOAD PROFILE (DISPLAY ONLY – RATE LIMIT SAFE)
+     LOAD PROFILE (SIMPLE & STABLE)
   ========================= */
   useEffect(() => {
     let active = true;
 
     const loadProfile = async () => {
-      // ❌ no token → no API call
-      if (!getAuthToken()) {
-        setLoadingProfile(false);
-        return;
-      }
-
-      // 🔁 already fetched → use cache
-      if (fetchedOnce.current) {
-        const cached = localStorage.getItem("tl_profile");
-        if (cached) {
-          try {
-            setProfile(JSON.parse(cached));
-          } catch { }
-        }
-        setLoadingProfile(false);
-        return;
-      }
-
       try {
+        // no token → not logged in
+        if (!getAuthToken()) {
+          setLoadingProfile(false);
+          return;
+        }
+
         const res = await api.getProfile();
         if (!active) return;
 
-        const user = res?.data || res;
+        const user = res?.user || res;
+
         if (!user || !user._id) {
+          // ❗ silently ignore
           setLoadingProfile(false);
           return;
         }
@@ -67,10 +56,8 @@ export default function Navbar() {
         }
 
         setProfile(fixedUser);
-        localStorage.setItem("tl_profile", JSON.stringify(fixedUser));
-        fetchedOnce.current = true;
       } catch {
-        // ❗ ignore errors (no logout)
+        // ❗ ignore errors, do not logout
       } finally {
         active && setLoadingProfile(false);
       }
@@ -94,6 +81,7 @@ export default function Navbar() {
         setDropdown(false);
       }
     };
+
     document.addEventListener("mousedown", handleClick);
     return () =>
       document.removeEventListener("mousedown", handleClick);
@@ -118,10 +106,8 @@ export default function Navbar() {
     try {
       await api.logout();
     } catch { }
-    localStorage.removeItem("tl_profile");
     setProfile(null);
-    fetchedOnce.current = false;
-    router.replace("/login");
+    router.push("/login");
   };
 
   const DefaultAvatar = () => (
@@ -199,41 +185,32 @@ export default function Navbar() {
 
           {dropdown && (
             <div style={styles.dropdownMenu}>
-              <button
-                onClick={() => router.push("/profile")}
-                style={styles.dropdownItem}
-              >
-                Profile
-              </button>
+              {getAuthToken() ? (
+                <>
+                  <Link href="/profile" legacyBehavior>
+                    <a style={styles.dropdownItem}>Profile</a>
+                  </Link>
+                  <Link href="/settings" legacyBehavior>
+                    <a style={styles.dropdownItem}>Settings</a>
+                  </Link>
+                  <Link href="/saved" legacyBehavior>
+                    <a style={styles.dropdownItem}>⭐ Saved</a>
+                  </Link>
 
-              <button
-                onClick={() => router.push("/settings")}
-                style={styles.dropdownItem}
-              >
-                Settings
-              </button>
-
-              <button
-                onClick={() => router.push("/saved")}
-                style={styles.dropdownItem}
-              >
-                ⭐ Saved
-              </button>
-
-              {profile ? (
-                <button
-                  onClick={logout}
-                  style={{ ...styles.dropdownItem, ...styles.logoutBtn }}
-                >
-                  Logout
-                </button>
+                  <button
+                    onClick={logout}
+                    style={{
+                      ...styles.dropdownItem,
+                      ...styles.logoutBtn,
+                    }}
+                  >
+                    Logout
+                  </button>
+                </>
               ) : (
-                <button
-                  onClick={() => router.push("/login")}
-                  style={styles.dropdownItem}
-                >
-                  Login
-                </button>
+                <Link href="/login" legacyBehavior>
+                  <a style={styles.dropdownItem}>Login</a>
+                </Link>
               )}
             </div>
           )}
@@ -278,7 +255,7 @@ export default function Navbar() {
 }
 
 /* =========================
-   STYLES (UNCHANGED)
+   STYLES
 ========================= */
 const styles = {
   navbar: {
@@ -343,12 +320,12 @@ const styles = {
   dropdownItem: {
     padding: "12px 14px",
     display: "block",
+    textDecoration: "none",
     color: "#111",
     borderBottom: "1px solid #eee",
     background: "transparent",
     width: "100%",
     textAlign: "left",
-    cursor: "pointer",
   },
   logoutBtn: { color: "#c92a2a", fontWeight: 700 },
   mobileBtn: { display: "none", fontSize: 22, cursor: "pointer" },
