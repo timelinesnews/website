@@ -115,7 +115,6 @@ export const api = {
     }
   },
 
-  /* 🔥 REQUIRED BY FRONTEND (WAS MISSING) */
   firebaseLoginAndStoreToken: async (idToken) => {
     if (!idToken) return { error: "Missing token" };
     try {
@@ -137,10 +136,11 @@ export const api = {
   },
 
   /* ============================
-       👤 BASIC AUTH
+       👤 BASIC AUTH (🔥 FIXED)
   ============================ */
   login: async (payload) => {
     try {
+      // 1️⃣ login request
       const res = await instance.post("/auth/login", payload);
       const data = res?.data;
 
@@ -149,14 +149,20 @@ export const api = {
         data?.data?.token ||
         data?.accessToken;
 
-      if (token) {
-        setAuthToken(token);
-      } else {
-        console.error("❌ Login success but token missing", data);
+      if (!token) {
         return { error: { message: "Login token missing" } };
       }
 
-      return data;
+      // 2️⃣ store token
+      setAuthToken(token);
+
+      // 3️⃣ verify user immediately (KEY FIX)
+      const me = await instance.get("/auth/me");
+
+      return {
+        success: true,
+        user: me?.data?.data || me?.data,
+      };
     } catch (err) {
       return { error: errOut(err) };
     }
@@ -275,17 +281,15 @@ export const api = {
   },
 
   /* ============================
-       💬 COMMENTS (BACKWARD SAFE)
+       💬 COMMENTS
   ============================ */
   getComments: async (newsId) => {
     if (!newsId) return [];
     try {
-      // try plural first
       const res = await instance.get(`/news/${newsId}/comments`);
       return res?.data?.comments || res?.data || [];
     } catch {
       try {
-        // fallback to singular route
         const res = await instance.get(`/news/${newsId}/comment`);
         return res?.data?.comments || res?.data || [];
       } catch {
