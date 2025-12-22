@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { api } from "../../services/api";
+import { api, getAuthToken } from "../../services/api";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -9,20 +9,30 @@ export default function ProfilePage() {
   const [user, setUser] = useState(null);
   const [myPosts, setMyPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  /* ================= LOAD PROFILE (FINAL & SAFE) ================= */
+  /* ================= LOAD PROFILE (SAFE & CORRECT) ================= */
   const loadProfile = useCallback(async () => {
+    const token = getAuthToken();
+
+    // 🔴 Truly not logged in
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
     try {
-      // 🔐 ALWAYS VERIFY SESSION FROM BACKEND
       const profileRes = await api.getProfile();
       const u = profileRes?.data || profileRes;
 
+      // 🟡 Backend slow / failed → DON'T logout
       if (!u || !u._id) {
-        router.replace("/login");
+        setError("PROFILE_NOT_READY");
         return;
       }
 
       setUser(u);
+      setError(null);
 
       try {
         const res = await api.get(`/news/user/${u._id}`);
@@ -31,8 +41,9 @@ export default function ProfilePage() {
         setMyPosts([]);
       }
     } catch (err) {
-      console.warn("Profile auth failed:", err?.message);
-      router.replace("/login");
+      // 🟡 Network / 429 / temporary error
+      console.warn("Profile load failed:", err?.message);
+      setError("TEMP_ERROR");
     } finally {
       setLoading(false);
     }
@@ -47,6 +58,39 @@ export default function ProfilePage() {
     api.logout();
     router.replace("/login");
   };
+
+  /* ================= STATES ================= */
+
+  // ⏳ First load
+  if (loading) {
+    return <div style={styles.loading}>⏳ Loading profile…</div>;
+  }
+
+  // 🟡 Token exists but backend slow / rate-limited
+  if (!user && getAuthToken()) {
+    return (
+      <div style={styles.loading}>
+        ⏳ Preparing your profile…
+        <p style={{ marginTop: 10, color: "#666" }}>
+          Please wait a moment
+        </p>
+      </div>
+    );
+  }
+
+  // 🔴 No token → login
+  if (!user) {
+    return (
+      <div style={styles.loading}>
+        <p style={{ marginBottom: 16 }}>
+          You need to log in to view your profile.
+        </p>
+        <button style={styles.btn} onClick={() => router.push("/login")}>
+          🔐 Go to Login
+        </button>
+      </div>
+    );
+  }
 
   /* ================= POST CARD ================= */
   const PostCard = ({ item }) => (
@@ -93,15 +137,6 @@ export default function ProfilePage() {
       </div>
     </div>
   );
-
-  /* ================= STATES ================= */
-
-  if (loading) {
-    return <div style={styles.loading}>⏳ Loading profile…</div>;
-  }
-
-  // ⚠️ SHOULD NEVER HIT (failsafe)
-  if (!user) return null;
 
   return (
     <>
