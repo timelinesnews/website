@@ -10,11 +10,11 @@ export default function ProfilePage() {
   const [myPosts, setMyPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  /* ================= LOAD PROFILE (FINAL FIX) ================= */
+  const [tab, setTab] = useState("posts"); // posts | followers | following
+
+  /* ================= LOAD PROFILE ================= */
   const loadProfile = useCallback(async () => {
     const token = getAuthToken();
-
-    // 🔴 No token at all
     if (!token) {
       router.replace("/login");
       return;
@@ -23,11 +23,8 @@ export default function ProfilePage() {
     try {
       const profileRes = await api.getProfile();
       const raw = profileRes?.user || profileRes;
-
-      // 🔥 MAIN FIX: normalize id
       const userId = raw?._id || raw?.id;
 
-      // 🟡 Backend slow / rate-limited → WAIT (no logout)
       if (!userId) {
         setLoading(false);
         return;
@@ -36,6 +33,8 @@ export default function ProfilePage() {
       const normalizedUser = {
         ...raw,
         _id: String(userId),
+        followers: raw?.followers || [],
+        following: raw?.following || [],
       };
 
       setUser(normalizedUser);
@@ -47,7 +46,7 @@ export default function ProfilePage() {
         setMyPosts([]);
       }
     } catch (err) {
-      console.warn("Profile load error (kept logged in):", err?.message);
+      console.warn("Profile load error:", err?.message);
     } finally {
       setLoading(false);
     }
@@ -57,41 +56,39 @@ export default function ProfilePage() {
     loadProfile();
   }, [loadProfile]);
 
-  /* ================= LOGOUT ================= */
-  const logoutUser = () => {
-    api.logout();
-    router.replace("/login");
-  };
-
   /* ================= STATES ================= */
-
   if (loading) {
     return <div style={styles.loading}>⏳ Loading profile…</div>;
   }
 
-  // 🟡 Token exists but backend delayed
   if (!user && getAuthToken()) {
     return (
       <div style={styles.loading}>
         ⏳ Preparing your profile…
-        <p style={{ marginTop: 8, color: "#666" }}>
-          Please wait a moment
-        </p>
+        <p style={{ color: "#666" }}>Please wait a moment</p>
       </div>
     );
   }
 
-  // 🔴 Truly logged out
   if (!user) {
     return (
       <div style={styles.loading}>
-        <p>You need to log in to view your profile.</p>
+        <p>You need to log in.</p>
         <button style={styles.btn} onClick={() => router.push("/login")}>
-          🔐 Go to Login
+          🔐 Login
         </button>
       </div>
     );
   }
+
+  /* ================= COUNTS ================= */
+  const postsCount = myPosts.length;
+  const followersCount = Array.isArray(user.followers)
+    ? user.followers.length
+    : user.followers || 0;
+  const followingCount = Array.isArray(user.following)
+    ? user.following.length
+    : user.following || 0;
 
   /* ================= POST CARD ================= */
   const PostCard = ({ item }) => (
@@ -102,30 +99,24 @@ export default function ProfilePage() {
       >
         {item.headline}
       </h3>
+    </div>
+  );
 
-      {item.photoUrl && (
-        <img
-          src={item.photoUrl}
-          alt={item.headline}
-          loading="lazy"
-          style={styles.postImage}
-        />
-      )}
-
-      <p style={styles.postDesc}>
-        {(item.content || "")
-          .replace(/<[^>]+>/g, "")
-          .slice(0, 120)}
-        …
-      </p>
-
-      <div style={styles.actionRow}>
-        <button
-          style={styles.editBtn}
-          onClick={() => router.push(`/news/edit/${item._id}`)}
-        >
-          ✏️ Edit
-        </button>
+  /* ================= USER ROW (followers/following) ================= */
+  const UserRow = ({ u }) => (
+    <div style={styles.userRow}>
+      <img
+        src={u?.profilePicture || "/default-user.png"}
+        alt={u?.username}
+        style={styles.userAvatar}
+      />
+      <div>
+        <div style={{ fontWeight: 700 }}>
+          {u?.firstName} {u?.lastName}
+        </div>
+        <div style={{ fontSize: 13, color: "#666" }}>
+          @{u?.username}
+        </div>
       </div>
     </div>
   );
@@ -139,7 +130,7 @@ export default function ProfilePage() {
       </Head>
 
       <div style={styles.wrapper}>
-        <div style={styles.cover}></div>
+        <div style={styles.cover} />
 
         <div style={styles.profileTopCard}>
           <img
@@ -158,32 +149,77 @@ export default function ProfilePage() {
             📍 {user.city}, {user.state}, {user.country}
           </div>
 
+          {/* ===== METERS ===== */}
+          <div style={styles.statsRow}>
+            <div onClick={() => setTab("posts")} style={styles.statBox}>
+              <b>{postsCount}</b>
+              <span>Posts</span>
+            </div>
+            <div onClick={() => setTab("followers")} style={styles.statBox}>
+              <b>{followersCount}</b>
+              <span>Followers</span>
+            </div>
+            <div onClick={() => setTab("following")} style={styles.statBox}>
+              <b>{followingCount}</b>
+              <span>Following</span>
+            </div>
+          </div>
+
           <div style={styles.btnRow}>
             <button
-              onClick={() => router.push("/profile/edit")}
               style={styles.btn}
+              onClick={() => router.push("/profile/edit")}
             >
               ✏️ Edit Profile
             </button>
-
             <button
-              onClick={logoutUser}
-              style={{ ...styles.btn, background: "#ffe5e5", color: "#c00" }}
+              style={{ ...styles.btn, background: "#fee2e2", color: "#b91c1c" }}
+              onClick={() => {
+                api.logout();
+                router.replace("/login");
+              }}
             >
               🚪 Logout
             </button>
           </div>
         </div>
 
-        <h2 style={styles.sectionTitle}>My Posts</h2>
+        {/* ===== TABS CONTENT ===== */}
+        <div style={{ marginTop: 24 }}>
+          {tab === "posts" && (
+            <>
+              {myPosts.length === 0 ? (
+                <div style={styles.empty}>No posts yet.</div>
+              ) : (
+                myPosts.map((p) => <PostCard key={p._id} item={p} />)
+              )}
+            </>
+          )}
 
-        {myPosts.length === 0 ? (
-          <div style={styles.empty}>
-            You haven't posted anything yet.
-          </div>
-        ) : (
-          myPosts.map((item) => <PostCard key={item._id} item={item} />)
-        )}
+          {tab === "followers" && (
+            <>
+              {followersCount === 0 ? (
+                <div style={styles.empty}>No followers yet.</div>
+              ) : (
+                user.followers.map((u, i) => (
+                  <UserRow key={i} u={u} />
+                ))
+              )}
+            </>
+          )}
+
+          {tab === "following" && (
+            <>
+              {followingCount === 0 ? (
+                <div style={styles.empty}>Not following anyone.</div>
+              ) : (
+                user.following.map((u, i) => (
+                  <UserRow key={i} u={u} />
+                ))
+              )}
+            </>
+          )}
+        </div>
       </div>
     </>
   );
@@ -213,6 +249,17 @@ const styles = {
   name: { fontSize: 23, fontWeight: 800 },
   username: { color: "#777" },
   location: { fontSize: 14, color: "#555", marginTop: 4 },
+
+  statsRow: {
+    display: "flex",
+    justifyContent: "space-around",
+    marginTop: 18,
+  },
+  statBox: {
+    cursor: "pointer",
+    textAlign: "center",
+  },
+
   btnRow: {
     display: "flex",
     gap: 12,
@@ -226,41 +273,32 @@ const styles = {
     cursor: "pointer",
     fontWeight: 600,
   },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: 700,
-    marginTop: 30,
-  },
+
   postCard: {
     background: "#fff",
-    padding: 18,
-    borderRadius: 16,
-    marginBottom: 16,
-  },
-  postTitle: {
-    fontSize: 18,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  postImage: {
-    width: "100%",
-    height: 220,
-    objectFit: "cover",
+    padding: 16,
     borderRadius: 14,
-    margin: "10px 0",
-  },
-  postDesc: { color: "#444" },
-  actionRow: {
-    display: "flex",
-    gap: 10,
-    marginTop: 10,
-  },
-  editBtn: {
-    padding: "6px 12px",
-    borderRadius: 8,
-    border: "1px solid #ccc",
+    marginBottom: 12,
     cursor: "pointer",
   },
-  empty: { textAlign: "center", marginTop: 40 },
+  postTitle: { fontSize: 17, fontWeight: 700 },
+
+  userRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    background: "#fff",
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  userAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: "50%",
+    objectFit: "cover",
+  },
+
+  empty: { textAlign: "center", marginTop: 30, color: "#666" },
   loading: { textAlign: "center", marginTop: 60 },
 };
