@@ -9,13 +9,12 @@ export default function ProfilePage() {
   const [user, setUser] = useState(null);
   const [myPosts, setMyPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  /* ================= LOAD PROFILE (SAFE & CORRECT) ================= */
+  /* ================= LOAD PROFILE (FINAL FIX) ================= */
   const loadProfile = useCallback(async () => {
     const token = getAuthToken();
 
-    // 🔴 Truly not logged in
+    // 🔴 No token at all
     if (!token) {
       router.replace("/login");
       return;
@@ -23,27 +22,32 @@ export default function ProfilePage() {
 
     try {
       const profileRes = await api.getProfile();
-      const u = profileRes?.data || profileRes;
+      const raw = profileRes?.user || profileRes;
 
-      // 🟡 Backend slow / failed → DON'T logout
-      if (!u || !u._id) {
-        setError("PROFILE_NOT_READY");
+      // 🔥 MAIN FIX: normalize id
+      const userId = raw?._id || raw?.id;
+
+      // 🟡 Backend slow / rate-limited → WAIT (no logout)
+      if (!userId) {
+        setLoading(false);
         return;
       }
 
-      setUser(u);
-      setError(null);
+      const normalizedUser = {
+        ...raw,
+        _id: String(userId),
+      };
+
+      setUser(normalizedUser);
 
       try {
-        const res = await api.get(`/news/user/${u._id}`);
+        const res = await api.get(`/news/user/${normalizedUser._id}`);
         setMyPosts(res?.data || []);
       } catch {
         setMyPosts([]);
       }
     } catch (err) {
-      // 🟡 Network / 429 / temporary error
-      console.warn("Profile load failed:", err?.message);
-      setError("TEMP_ERROR");
+      console.warn("Profile load error (kept logged in):", err?.message);
     } finally {
       setLoading(false);
     }
@@ -61,30 +65,27 @@ export default function ProfilePage() {
 
   /* ================= STATES ================= */
 
-  // ⏳ First load
   if (loading) {
     return <div style={styles.loading}>⏳ Loading profile…</div>;
   }
 
-  // 🟡 Token exists but backend slow / rate-limited
+  // 🟡 Token exists but backend delayed
   if (!user && getAuthToken()) {
     return (
       <div style={styles.loading}>
         ⏳ Preparing your profile…
-        <p style={{ marginTop: 10, color: "#666" }}>
+        <p style={{ marginTop: 8, color: "#666" }}>
           Please wait a moment
         </p>
       </div>
     );
   }
 
-  // 🔴 No token → login
+  // 🔴 Truly logged out
   if (!user) {
     return (
       <div style={styles.loading}>
-        <p style={{ marginBottom: 16 }}>
-          You need to log in to view your profile.
-        </p>
+        <p>You need to log in to view your profile.</p>
         <button style={styles.btn} onClick={() => router.push("/login")}>
           🔐 Go to Login
         </button>
@@ -108,12 +109,14 @@ export default function ProfilePage() {
           alt={item.headline}
           loading="lazy"
           style={styles.postImage}
-          onError={(e) => (e.currentTarget.style.display = "none")}
         />
       )}
 
       <p style={styles.postDesc}>
-        {(item.content || "").replace(/<[^>]+>/g, "").slice(0, 120)}…
+        {(item.content || "")
+          .replace(/<[^>]+>/g, "")
+          .slice(0, 120)}
+        …
       </p>
 
       <div style={styles.actionRow}>
@@ -122,17 +125,6 @@ export default function ProfilePage() {
           onClick={() => router.push(`/news/edit/${item._id}`)}
         >
           ✏️ Edit
-        </button>
-
-        <button
-          style={styles.deleteBtn}
-          onClick={async () => {
-            if (!confirm("Delete this post?")) return;
-            await api.delete(`/news/${item._id}`);
-            setMyPosts((prev) => prev.filter((p) => p._id !== item._id));
-          }}
-        >
-          🗑️ Delete
         </button>
       </div>
     </div>
@@ -256,7 +248,6 @@ const styles = {
     objectFit: "cover",
     borderRadius: 14,
     margin: "10px 0",
-    cursor: "pointer",
   },
   postDesc: { color: "#444" },
   actionRow: {
@@ -268,14 +259,6 @@ const styles = {
     padding: "6px 12px",
     borderRadius: 8,
     border: "1px solid #ccc",
-    cursor: "pointer",
-  },
-  deleteBtn: {
-    padding: "6px 12px",
-    borderRadius: 8,
-    border: "1px solid #fca5a5",
-    background: "#fee2e2",
-    color: "#b91c1c",
     cursor: "pointer",
   },
   empty: { textAlign: "center", marginTop: 40 },

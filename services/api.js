@@ -45,12 +45,21 @@ export const getAdminToken = () => {
 ====================================================== */
 instance.interceptors.request.use(
   (config) => {
+    if (config?.url?.includes("undefined")) {
+      console.error("🚨 BLOCKED API REQUEST:", config.url);
+      return Promise.reject(new Error("Blocked undefined request"));
+    }
+
     if (typeof window !== "undefined") {
-      const token = getAdminToken() || getAuthToken();
+      const admin = getAdminToken();
+      const user = getAuthToken();
+      const token = admin || user;
+
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
+
     return config;
   },
   (err) => Promise.reject(err)
@@ -63,14 +72,14 @@ instance.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err?.response?.status === 401) {
-      console.warn("⚠️ 401 received – token preserved");
+      console.warn("⚠️ 401 received (token preserved)");
     }
     return Promise.reject(err);
   }
 );
 
 /* ======================================================
-   🧩 HELPERS
+   🛡 HELPERS
 ====================================================== */
 const safe = (res) => res?.data ?? null;
 
@@ -80,14 +89,58 @@ const errOut = (err) => {
 };
 
 /* ======================================================
-   🧩 API
+   🧩 API OBJECT
 ====================================================== */
 export const api = {
-  /* =========================
-       🔐 LOGIN
-  ========================= */
+  /* ============================
+       🔥 FIREBASE AUTH
+  ============================ */
+  firebaseLogin: async (idToken) => {
+    if (!idToken) return { error: "Missing token" };
+    try {
+      const res = await instance.post("/auth/firebase-login", { idToken });
+      const data = res?.data;
+
+      const token =
+        data?.token ||
+        data?.data?.token ||
+        data?.accessToken;
+
+      if (token) setAuthToken(token);
+      else console.error("❌ Firebase login token missing", data);
+
+      return data;
+    } catch (err) {
+      return { error: errOut(err) };
+    }
+  },
+
+  firebaseLoginAndStoreToken: async (idToken) => {
+    if (!idToken) return { error: "Missing token" };
+    try {
+      const res = await instance.post("/auth/firebase-login", { idToken });
+      const data = res?.data;
+
+      const token =
+        data?.token ||
+        data?.data?.token ||
+        data?.accessToken;
+
+      if (token) setAuthToken(token);
+      else console.error("❌ Firebase login token missing", data);
+
+      return data;
+    } catch (err) {
+      return { error: errOut(err) };
+    }
+  },
+
+  /* ============================
+       👤 BASIC AUTH (🔥 FIXED)
+  ============================ */
   login: async (payload) => {
     try {
+      // 1️⃣ login request
       const res = await instance.post("/auth/login", payload);
       const data = res?.data;
 
@@ -100,12 +153,15 @@ export const api = {
         return { error: { message: "Login token missing" } };
       }
 
-      // ✅ ONLY store token – NO /me CALL HERE
+      // 2️⃣ store token
       setAuthToken(token);
+
+      // 3️⃣ verify user immediately (KEY FIX)
+      const me = await instance.get("/auth/me");
 
       return {
         success: true,
-        user: data?.user || null,
+        user: me?.data?.data || me?.data,
       };
     } catch (err) {
       return { error: errOut(err) };
@@ -126,16 +182,16 @@ export const api = {
     return { success: true };
   },
 
-  /* =========================
+  /* ============================
        👤 PROFILE
-  ========================= */
+  ============================ */
   getProfile: async () => {
     try {
       const res = await instance.get("/auth/me");
       return safe(res);
-    } catch (err) {
-      // ✅ IMPORTANT: return explicit error
-      return { error: true };
+    } catch {
+      console.warn("Profile load failed, token kept");
+      return null;
     }
   },
 
@@ -153,9 +209,44 @@ export const api = {
     }
   },
 
-  /* =========================
+  /* ============================
+       🌍 LOCATION
+  ============================ */
+  getStates: async (countryCode) => {
+    if (!countryCode) return [];
+    try {
+      const res = await instance.get(`/locations/states/${countryCode}`);
+      return safe(res)?.data ?? [];
+    } catch {
+      return [];
+    }
+  },
+
+  getCities: async (countryCode, stateCode) => {
+    if (!countryCode || !stateCode) return [];
+    try {
+      const res = await instance.get(
+        `/locations/cities/${countryCode}/${stateCode}`
+      );
+      return safe(res)?.data ?? [];
+    } catch {
+      return [];
+    }
+  },
+
+  getVillages: async (params) => {
+    if (!params) return [];
+    try {
+      const res = await instance.get(`/locations/villages`, { params });
+      return safe(res)?.data ?? [];
+    } catch {
+      return [];
+    }
+  },
+
+  /* ============================
        📰 NEWS
-  ========================= */
+  ============================ */
   getNews: async (params = {}) => {
     try {
       const res = await instance.get("/news", { params });
@@ -172,6 +263,38 @@ export const api = {
       return safe(res)?.data ?? null;
     } catch {
       return null;
+    }
+  },
+
+  createNews: async (formData) => {
+    try {
+      const token = getAuthToken();
+      const res = await fetch(`${BASE_URL}/news`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      return await res.json();
+    } catch {
+      return { error: { message: "Upload failed" } };
+    }
+  },
+
+  /* ============================
+       💬 COMMENTS
+  ============================ */
+  getComments: async (newsId) => {
+    if (!newsId) return [];
+    try {
+      const res = await instance.get(`/news/${newsId}/comments`);
+      return res?.data?.comments || res?.data || [];
+    } catch {
+      try {
+        const res = await instance.get(`/news/${newsId}/comment`);
+        return res?.data?.comments || res?.data || [];
+      } catch {
+        return [];
+      }
     }
   },
 };

@@ -30,12 +30,20 @@ export default function MyPosts() {
     try {
       /* ---------- PROFILE ---------- */
       const profileRes = await api.getProfile();
-      const user = profileRes?.user || profileRes;
+      const rawUser = profileRes?.user || profileRes;
 
-      if (!user?._id) {
+      // 🔥 FIX: normalize user id (_id vs id)
+      const userId = rawUser?._id || rawUser?.id;
+
+      if (!userId) {
         router.replace("/login");
         return;
       }
+
+      const user = {
+        ...rawUser,
+        _id: String(userId),
+      };
 
       setProfile(user);
 
@@ -59,6 +67,7 @@ export default function MyPosts() {
             p?.author?._id ||
             p?.userId ||
             p?.user?._id ||
+            p?.user?.id ||
             null;
 
           if (postUserId) {
@@ -85,7 +94,7 @@ export default function MyPosts() {
 
           return {
             ...p,
-            _id: String(realId), // 🔥 FORCE STRING ID
+            _id: String(realId),
           };
         })
         .filter(Boolean);
@@ -100,7 +109,7 @@ export default function MyPosts() {
   };
 
   /* ======================================================
-     IMAGE FIX (MAIN FIX)
+     IMAGE FIX
   ====================================================== */
   const fixImage = (post) => {
     const img =
@@ -128,7 +137,7 @@ export default function MyPosts() {
   };
 
   /* ======================================================
-     LOADING / EMPTY
+     LOADING
   ====================================================== */
   if (loading) {
     return (
