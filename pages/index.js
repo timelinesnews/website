@@ -61,20 +61,31 @@ export default function Home() {
   const loadNews = useCallback(async () => {
     setLoading(true);
     try {
-      // 🔥 IMPORTANT: NO LOCATION PARAMS
       const res = await api.get("/news");
-      const list = Array.isArray(res?.data) ? res.data : [];
+
+      // ✅ HANDLE ALL RESPONSE SHAPES
+      const list = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
+
+      if (list.length === 0) {
+        setNews([]);
+        setLoading(false);
+        return;
+      }
 
       // 🔥 GLOBAL SORT = MOST VIEWED FIRST
       const sorted = list
-        .filter((n) => n?._id)
+        .filter((n) => n && n._id)
         .sort(
           (a, b) =>
             (b.views || 0) - (a.views || 0) ||
             new Date(b.createdAt) - new Date(a.createdAt)
         );
 
-      setNews(sorted);
+      setNews(sorted.length ? sorted : list);
     } catch (err) {
       console.warn("Failed to load news:", err);
       setNews([]);
@@ -110,7 +121,7 @@ export default function Home() {
     }
   };
 
-  /* ========================= LOCATION FILTER (OPTIONAL) ========================= */
+  /* ========================= LOCATION FILTER ========================= */
   const locationFiltered = news.filter((item) => {
     if (country && item.location?.country !== country) return false;
     if (stateCode && item.location?.state !== stateCode) return false;
@@ -120,7 +131,7 @@ export default function Home() {
   });
 
   /* ========================= CATEGORY FILTER ========================= */
-  const finalNews =
+  const categoryFiltered =
     activeCategory === "All"
       ? locationFiltered
       : locationFiltered.filter(
@@ -129,7 +140,15 @@ export default function Home() {
           activeCategory.toLowerCase()
       );
 
-  const trendingNews = finalNews.slice(0, 10);
+  // 🛟 FINAL FALLBACK: LAST POST MUST SHOW
+  const finalNews =
+    categoryFiltered.length > 0
+      ? categoryFiltered
+      : news.length > 0
+        ? [news[0]]
+        : [];
+
+  const trendingNews = news.slice(0, 10);
 
   /* ========================= LOADING ========================= */
   if (loading) {
@@ -143,7 +162,7 @@ export default function Home() {
   /* ========================= UI ========================= */
   return (
     <div style={styles.container}>
-      {/* ⭐ LOCATION BAR (FILTER ONLY) */}
+      {/* ⭐ LOCATION BAR */}
       <div style={styles.locationBar}>
         <button
           onClick={autoLocate}
@@ -191,7 +210,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* 🔥 TRENDING (GLOBAL MOST VIEWED) */}
+      {/* 🔥 TRENDING */}
       <h2 style={styles.heading}>🔥 Most Viewed</h2>
       {trendingNews.length > 0 ? (
         <TrendingSlider items={trendingNews} />
@@ -220,10 +239,12 @@ export default function Home() {
       </h2>
 
       {finalNews.length > 0 ? (
-        <NewsList news={finalNews.map((n) => ({
-          ...n,
-          image: fixImage(n.photoUrl),
-        }))} />
+        <NewsList
+          news={finalNews.map((n) => ({
+            ...n,
+            image: fixImage(n.photoUrl),
+          }))}
+        />
       ) : (
         <p style={styles.emptyText}>No news found.</p>
       )}
