@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "../services/api";
 
 import CategoryTabs from "../components/CategoryTabs";
@@ -29,6 +29,8 @@ export default function Home() {
   const [village, setVillage] = useState("");
   const [detecting, setDetecting] = useState(false);
 
+  const fetchedOnce = useRef(false); // 🔑 prevent spam
+
   /* ========================= LOAD SAVED LOCATION ========================= */
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -55,11 +57,20 @@ export default function Home() {
     );
   }, [country, stateCode, cityName, village]);
 
-  /* ========================= LOAD NEWS (FIXED & CORRECT) ========================= */
+  /* ========================= LOAD NEWS (RATE-LIMIT SAFE) ========================= */
   const loadNews = useCallback(async () => {
+    // 🔁 already fetched → use cache
+    if (fetchedOnce.current) {
+      try {
+        const cached = JSON.parse(localStorage.getItem("tl_news") || "[]");
+        if (Array.isArray(cached)) setNews(cached);
+      } catch { }
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      // ✅ api.getNews already returns ARRAY
       const list = await api.getNews();
 
       if (!Array.isArray(list) || list.length === 0) {
@@ -77,6 +88,8 @@ export default function Home() {
         );
 
       setNews(sorted);
+      localStorage.setItem("tl_news", JSON.stringify(sorted));
+      fetchedOnce.current = true;
     } catch (err) {
       console.error("Failed to load news:", err);
       setNews([]);
@@ -112,7 +125,7 @@ export default function Home() {
     }
   };
 
-  /* ========================= LOCATION FILTER (SAFE) ========================= */
+  /* ========================= LOCATION FILTER ========================= */
   const locationFiltered = news.filter((item) => {
     if (country && item.location?.country !== country) return false;
     if (stateCode && item.location?.state !== stateCode) return false;
@@ -131,7 +144,6 @@ export default function Home() {
           activeCategory.toLowerCase()
       );
 
-  /* ========================= FINAL NEWS ========================= */
   const finalNews = categoryFiltered;
   const trendingNews = news.slice(0, 10);
 
