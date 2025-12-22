@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { api } from "../../services/api";
+import { api, getAuthToken } from "../../services/api";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -10,13 +10,12 @@ export default function ProfilePage() {
   const [myPosts, setMyPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  /* ================= LOAD PROFILE (SIMPLE & SAFE) ================= */
+  /* ================= LOAD PROFILE (STABLE) ================= */
   const loadProfile = useCallback(async () => {
     try {
       const profileRes = await api.getProfile();
       const u = profileRes?.user || profileRes;
 
-      // ❗ DO NOT REDIRECT / DO NOT ERROR
       if (!u || !u._id) {
         setLoading(false);
         return;
@@ -49,13 +48,12 @@ export default function ProfilePage() {
 
   /* ================= POST CARD ================= */
   const PostCard = ({ item }) => {
-    const openPost = () => {
-      router.push(`/news/${item._id}`);
-    };
-
     return (
       <div style={styles.postCard}>
-        <h3 style={styles.postTitle} onClick={openPost}>
+        <h3
+          style={styles.postTitle}
+          onClick={() => router.push(`/news/${item._id}`)}
+        >
           {item.headline}
         </h3>
 
@@ -66,7 +64,6 @@ export default function ProfilePage() {
             loading="lazy"
             style={styles.postImage}
             onError={(e) => (e.currentTarget.style.display = "none")}
-            onClick={openPost}
           />
         )}
 
@@ -103,13 +100,26 @@ export default function ProfilePage() {
   };
 
   /* ================= STATES ================= */
+
   if (loading) {
     return <div style={styles.loading}>⏳ Loading profile…</div>;
   }
 
-  // ❗ If user is null, silently stay on page (NO REDIRECT / NO ERROR)
+  // 🔑 USER NOT LOADED → SHOW LOGIN PROMPT (NOT BLANK)
   if (!user) {
-    return <div style={styles.loading}></div>;
+    return (
+      <div style={styles.loading}>
+        <p style={{ marginBottom: 16 }}>
+          You need to log in to view your profile.
+        </p>
+        <button
+          style={styles.btn}
+          onClick={() => router.push("/login")}
+        >
+          🔐 Go to Login
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -214,6 +224,7 @@ const styles = {
     borderRadius: 10,
     border: "1px solid #ddd",
     cursor: "pointer",
+    fontWeight: 600,
   },
   sectionTitle: {
     fontSize: 22,
