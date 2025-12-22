@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { api } from "../../services/api";
+import { api, getAuthToken } from "../../services/api";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -9,28 +9,40 @@ export default function ProfilePage() {
   const [user, setUser] = useState(null);
   const [myPosts, setMyPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  /* ================= LOAD PROFILE ================= */
+  /* ================= LOAD PROFILE (SAFE) ================= */
   const loadProfile = useCallback(async () => {
     try {
-      // 🔐 logged-in user
+      setError(null);
+
+      // 🔐 no token → real logout case
+      if (!getAuthToken()) {
+        router.replace("/login");
+        return;
+      }
+
       const profileRes = await api.getProfile();
       const u = profileRes?.user || profileRes;
 
-      if (!u?._id) {
-        router.replace("/login");
+      // ⚠️ profile API failed but token exists → DO NOT LOGOUT
+      if (!u || !u._id) {
+        setError("Profile temporarily unavailable");
         return;
       }
 
       setUser(u);
 
-      // 🔥 LOAD ONLY USER POSTS (NEW API)
-      const res = await api.get(`/news/user/${u._id}`);
-      const list = res?.data || [];
-
-      setMyPosts(list);
+      // 🔥 LOAD USER POSTS
+      try {
+        const res = await api.get(`/news/user/${u._id}`);
+        setMyPosts(res?.data || []);
+      } catch {
+        setMyPosts([]);
+      }
     } catch (err) {
       console.error("Profile load error:", err);
+      setError("Profile temporarily unavailable");
     } finally {
       setLoading(false);
     }
@@ -40,6 +52,7 @@ export default function ProfilePage() {
     loadProfile();
   }, [loadProfile]);
 
+  /* ================= LOGOUT ================= */
   const logoutUser = () => {
     api.logout();
     router.push("/login");
@@ -75,7 +88,6 @@ export default function ProfilePage() {
           …
         </p>
 
-        {/* 🔒 OWNER ACTIONS */}
         <div style={styles.actionRow}>
           <button
             style={styles.editBtn}
@@ -89,7 +101,9 @@ export default function ProfilePage() {
             onClick={async () => {
               if (!confirm("Delete this post?")) return;
               await api.delete(`/news/${item._id}`);
-              setMyPosts((prev) => prev.filter((p) => p._id !== item._id));
+              setMyPosts((prev) =>
+                prev.filter((p) => p._id !== item._id)
+              );
             }}
           >
             🗑️ Delete
@@ -99,9 +113,19 @@ export default function ProfilePage() {
     );
   };
 
-  /* ================= LOADING ================= */
+  /* ================= STATES ================= */
   if (loading) {
     return <div style={styles.loading}>⏳ Loading profile…</div>;
+  }
+
+  if (error && !user) {
+    return (
+      <div style={styles.loading}>
+        ⚠️ {error}
+        <br />
+        Please refresh the page.
+      </div>
+    );
   }
 
   if (!user) {
@@ -124,7 +148,9 @@ export default function ProfilePage() {
             src={user.profilePicture || "/default-user.png"}
             alt={user.username}
             style={styles.avatar}
-            onError={(e) => (e.currentTarget.src = "/default-user.png")}
+            onError={(e) =>
+              (e.currentTarget.src = "/default-user.png")
+            }
           />
 
           <div style={styles.name}>
@@ -146,7 +172,11 @@ export default function ProfilePage() {
 
             <button
               onClick={logoutUser}
-              style={{ ...styles.btn, background: "#ffe5e5", color: "#c00" }}
+              style={{
+                ...styles.btn,
+                background: "#ffe5e5",
+                color: "#c00",
+              }}
             >
               🚪 Logout
             </button>
@@ -156,9 +186,13 @@ export default function ProfilePage() {
         <h2 style={styles.sectionTitle}>My Posts</h2>
 
         {myPosts.length === 0 ? (
-          <div style={styles.empty}>You haven't posted anything yet.</div>
+          <div style={styles.empty}>
+            You haven't posted anything yet.
+          </div>
         ) : (
-          myPosts.map((item) => <PostCard key={item._id} item={item} />)
+          myPosts.map((item) => (
+            <PostCard key={item._id} item={item} />
+          ))
         )}
       </div>
     </>
@@ -189,21 +223,34 @@ const styles = {
   name: { fontSize: 23, fontWeight: 800 },
   username: { color: "#777" },
   location: { fontSize: 14, color: "#555", marginTop: 4 },
-  btnRow: { display: "flex", gap: 12, justifyContent: "center", marginTop: 18 },
+  btnRow: {
+    display: "flex",
+    gap: 12,
+    justifyContent: "center",
+    marginTop: 18,
+  },
   btn: {
     padding: "8px 16px",
     borderRadius: 10,
     border: "1px solid #ddd",
     cursor: "pointer",
   },
-  sectionTitle: { fontSize: 22, fontWeight: 700, marginTop: 30 },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 700,
+    marginTop: 30,
+  },
   postCard: {
     background: "#fff",
     padding: 18,
     borderRadius: 16,
     marginBottom: 16,
   },
-  postTitle: { fontSize: 18, fontWeight: 700, cursor: "pointer" },
+  postTitle: {
+    fontSize: 18,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
   postImage: {
     width: "100%",
     height: 220,
