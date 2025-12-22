@@ -15,21 +15,18 @@ export default function Navbar() {
   const [dropdown, setDropdown] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
-  const [profileError, setProfileError] = useState(false); // 🛡 NEW
 
   const dropdownRef = useRef(null);
 
   /* =========================
-     LOAD PROFILE (HARD SAFE)
+     LOAD PROFILE (SIMPLE & STABLE)
   ========================= */
   useEffect(() => {
     let active = true;
 
     const loadProfile = async () => {
       try {
-        setProfileError(false);
-
-        // 🛑 NO TOKEN → DO NOT CALL API
+        // no token → not logged in
         if (!getAuthToken()) {
           setLoadingProfile(false);
           return;
@@ -40,36 +37,36 @@ export default function Navbar() {
 
         const user = res?.user || res;
 
-        // ❌ PROFILE FAIL ≠ LOGOUT
-        if (!user) {
-          console.warn("Profile API returned empty, keeping user logged in");
-          setProfileError(true);
+        if (!user || !user._id) {
+          // ❗ silently ignore
+          setLoadingProfile(false);
           return;
         }
 
         const fixedUser = { ...user };
 
         if (
-          fixedUser.avatar &&
-          !fixedUser.avatar.startsWith("http")
+          fixedUser.profilePicture &&
+          !fixedUser.profilePicture.startsWith("http")
         ) {
-          fixedUser.avatar = `${BACKEND}/${fixedUser.avatar.replace(
+          fixedUser.profilePicture = `${BACKEND}/${fixedUser.profilePicture.replace(
             /^\/+/,
             ""
           )}`;
         }
 
         setProfile(fixedUser);
-      } catch (err) {
-        console.warn("Profile load failed, token preserved");
-        setProfileError(true);
+      } catch {
+        // ❗ ignore errors, do not logout
       } finally {
         active && setLoadingProfile(false);
       }
     };
 
     loadProfile();
-    return () => (active = false);
+    return () => {
+      active = false;
+    };
   }, []);
 
   /* =========================
@@ -175,9 +172,9 @@ export default function Navbar() {
             style={styles.avatarWrapper}
             onClick={() => setDropdown((p) => !p)}
           >
-            {!loadingProfile && profile?.avatar ? (
+            {!loadingProfile && profile?.profilePicture ? (
               <img
-                src={profile.avatar}
+                src={profile.profilePicture}
                 alt="avatar"
                 style={styles.avatar}
               />
