@@ -41,36 +41,45 @@ export const getAdminToken = () => {
 };
 
 /* ======================================================
-   🛡 HARD BLOCK: NEVER ALLOW /undefined REQUESTS
+   🛡 HARD BLOCK + AUTH ATTACH
 ====================================================== */
 instance.interceptors.request.use(
   (config) => {
     if (config?.url?.includes("undefined")) {
-      console.error(
-        "🚨 BLOCKED API REQUEST WITH UNDEFINED:",
-        config.method?.toUpperCase(),
-        config.url
-      );
-      return Promise.reject(
-        new Error("Blocked request with undefined id")
-      );
+      console.error("🚨 BLOCKED API REQUEST:", config.url);
+      return Promise.reject(new Error("Blocked undefined request"));
     }
 
     if (typeof window !== "undefined") {
       const admin = getAdminToken();
       const user = getAuthToken();
+      const token = admin || user;
 
-      if (admin) config.headers.Authorization = `Bearer ${admin}`;
-      else if (user)
-        config.headers.Authorization = `Bearer ${user}`;
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
+
     return config;
   },
   (err) => Promise.reject(err)
 );
 
 /* ======================================================
-   🛡 RESPONSE HELPERS
+   🛡 RESPONSE INTERCEPTOR (NO AUTO LOGOUT)
+====================================================== */
+instance.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err?.response?.status === 401) {
+      console.warn("⚠️ 401 received (token kept, no logout)");
+    }
+    return Promise.reject(err);
+  }
+);
+
+/* ======================================================
+   🛡 HELPERS
 ====================================================== */
 const safe = (res) => res?.data ?? null;
 
@@ -90,17 +99,11 @@ export const api = {
     if (!idToken) return { error: "Missing token" };
     try {
       const res = await instance.post("/auth/firebase-login", { idToken });
+      if (res?.data?.token) setAuthToken(res.data.token);
       return safe(res);
     } catch (err) {
-      console.error("firebaseLogin error:", errOut(err));
       return { error: errOut(err) };
     }
-  },
-
-  firebaseLoginAndStoreToken: async (idToken) => {
-    const data = await api.firebaseLogin(idToken);
-    if (data?.token) setAuthToken(data.token);
-    return data;
   },
 
   /* ============================
@@ -131,13 +134,14 @@ export const api = {
   },
 
   /* ============================
-       👤 PROFILE
+       👤 PROFILE (SAFE)
   ============================ */
   getProfile: async () => {
     try {
       const res = await instance.get("/auth/me");
       return safe(res);
-    } catch {
+    } catch (err) {
+      console.warn("Profile load failed, token preserved");
       return null;
     }
   },
@@ -150,15 +154,6 @@ export const api = {
             ? { "Content-Type": "multipart/form-data" }
             : {},
       });
-      return safe(res);
-    } catch (err) {
-      return { error: errOut(err) };
-    }
-  },
-
-  updatePaymentMethod: async (payload) => {
-    try {
-      const res = await instance.put("/auth/payment-method", payload);
       return safe(res);
     } catch (err) {
       return { error: errOut(err) };
@@ -201,7 +196,7 @@ export const api = {
   },
 
   /* ============================
-       📰 NEWS
+       📰 NEWS (NEVER BLANK)
   ============================ */
   getNews: async (params = {}) => {
     try {
@@ -213,10 +208,7 @@ export const api = {
   },
 
   getNewsById: async (id) => {
-    if (!id) {
-      console.warn("🚫 getNewsById blocked (invalid id):", id);
-      return null;
-    }
+    if (!id) return null;
     try {
       const res = await instance.get(`/news/${id}`);
       return safe(res)?.data ?? null;
@@ -230,58 +222,12 @@ export const api = {
       const token = getAuthToken();
       const res = await fetch(`${BASE_URL}/news`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
       return await res.json();
     } catch {
       return { error: { message: "Upload failed" } };
-    }
-  },
-
-  updateNews: async (id, formData) => {
-    if (!id) return { error: "Invalid id" };
-    try {
-      const res = await instance.put(`/news/${id}`, formData);
-      return safe(res);
-    } catch (err) {
-      return { error: errOut(err) };
-    }
-  },
-
-  deleteNews: async (id) => {
-    if (!id) return { error: "Invalid id" };
-    try {
-      const res = await instance.delete(`/news/${id}`);
-      return safe(res);
-    } catch (err) {
-      return { error: errOut(err) };
-    }
-  },
-
-  likeNews: async (id) => {
-    if (!id) {
-      console.warn("🚫 likeNews blocked (invalid id):", id);
-      return null;
-    }
-    try {
-      const res = await instance.post(`/news/${id}/like`);
-      return safe(res);
-    } catch {
-      return null;
-    }
-  },
-
-  incrementView: async (id) => {
-    if (!id) {
-      console.warn("🚫 incrementView blocked (invalid id):", id);
-      return null;
-    }
-    try {
-      const res = await instance.post(`/news/${id}/view`);
-      return safe(res);
-    } catch {
-      return null;
     }
   },
 
@@ -297,34 +243,6 @@ export const api = {
       return [];
     }
   },
-
-  addComment: async (newsId, text) => {
-    if (!newsId || !text) return { error: "Invalid comment" };
-    try {
-      const res = await instance.post(`/news/${newsId}/comment`, { text });
-      return safe(res);
-    } catch (err) {
-      return { error: errOut(err) };
-    }
-  },
-
-  deleteComment: async (newsId, commentId) => {
-    if (!newsId || !commentId)
-      return { error: "Invalid comment" };
-    try {
-      const res = await instance.delete(
-        `/news/${newsId}/comment/${commentId}`
-      );
-      return safe(res);
-    } catch (err) {
-      return { error: errOut(err) };
-    }
-  },
-
-  /* ============================
-       🔧 UTILS
-  ============================ */
-  getBaseUrl: () => BASE_URL,
 };
 
 export default instance;

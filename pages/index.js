@@ -55,20 +55,14 @@ export default function Home() {
     );
   }, [country, stateCode, cityName, village]);
 
-  /* ========================= LOAD NEWS (FIXED) ========================= */
+  /* ========================= LOAD NEWS (FIXED & CORRECT) ========================= */
   const loadNews = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get("/news");
+      // ✅ api.getNews already returns ARRAY
+      const list = await api.getNews();
 
-      // ✅ CORRECT DATA EXTRACTION (THIS WAS THE BUG)
-      const list = Array.isArray(res?.data?.data)
-        ? res.data.data
-        : [];
-
-      console.log("NEWS FROM API:", list); // 👈 debug
-
-      if (!list.length) {
+      if (!Array.isArray(list) || list.length === 0) {
         setNews([]);
         setLoading(false);
         return;
@@ -118,7 +112,7 @@ export default function Home() {
     }
   };
 
-  /* ========================= LOCATION FILTER ========================= */
+  /* ========================= LOCATION FILTER (SAFE) ========================= */
   const locationFiltered = news.filter((item) => {
     if (country && item.location?.country !== country) return false;
     if (stateCode && item.location?.state !== stateCode) return false;
@@ -137,14 +131,8 @@ export default function Home() {
           activeCategory.toLowerCase()
       );
 
-  // 🛟 FALLBACK: AT LEAST ONE POST
-  const finalNews =
-    categoryFiltered.length > 0
-      ? categoryFiltered
-      : news.length > 0
-        ? [news[0]]
-        : [];
-
+  /* ========================= FINAL NEWS ========================= */
+  const finalNews = categoryFiltered;
   const trendingNews = news.slice(0, 10);
 
   if (loading) {
