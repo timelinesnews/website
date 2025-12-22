@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { api, getAuthToken } from "../../services/api";
+import { api } from "../../services/api";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -9,31 +9,21 @@ export default function ProfilePage() {
   const [user, setUser] = useState(null);
   const [myPosts, setMyPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  /* ================= LOAD PROFILE (SAFE) ================= */
+  /* ================= LOAD PROFILE (SIMPLE & SAFE) ================= */
   const loadProfile = useCallback(async () => {
     try {
-      setError(null);
-
-      // 🔐 no token → real logout case
-      if (!getAuthToken()) {
-        router.replace("/login");
-        return;
-      }
-
       const profileRes = await api.getProfile();
       const u = profileRes?.user || profileRes;
 
-      // ⚠️ profile API failed but token exists → DO NOT LOGOUT
+      // ❗ DO NOT REDIRECT / DO NOT ERROR
       if (!u || !u._id) {
-        setError("Profile temporarily unavailable");
+        setLoading(false);
         return;
       }
 
       setUser(u);
 
-      // 🔥 LOAD USER POSTS
       try {
         const res = await api.get(`/news/user/${u._id}`);
         setMyPosts(res?.data || []);
@@ -41,12 +31,11 @@ export default function ProfilePage() {
         setMyPosts([]);
       }
     } catch (err) {
-      console.error("Profile load error:", err);
-      setError("Profile temporarily unavailable");
+      console.warn("Profile load skipped:", err?.message);
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     loadProfile();
@@ -118,18 +107,9 @@ export default function ProfilePage() {
     return <div style={styles.loading}>⏳ Loading profile…</div>;
   }
 
-  if (error && !user) {
-    return (
-      <div style={styles.loading}>
-        ⚠️ {error}
-        <br />
-        Please refresh the page.
-      </div>
-    );
-  }
-
+  // ❗ If user is null, silently stay on page (NO REDIRECT / NO ERROR)
   if (!user) {
-    return <div style={styles.loading}>❌ Failed to load profile.</div>;
+    return <div style={styles.loading}></div>;
   }
 
   return (
