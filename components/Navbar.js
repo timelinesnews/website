@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { api, getAuthToken } from "../services/api";
+import { api } from "../services/api";
 
 const BACKEND =
   process.env.NEXT_PUBLIC_BACKEND ||
@@ -19,32 +19,23 @@ export default function Navbar() {
   const dropdownRef = useRef(null);
 
   /* =========================
-     LOAD PROFILE (SIMPLE & STABLE)
+     LOAD PROFILE (DISPLAY ONLY)
   ========================= */
   useEffect(() => {
     let active = true;
 
     const loadProfile = async () => {
       try {
-        // no token → not logged in
-        if (!getAuthToken()) {
-          setLoadingProfile(false);
-          return;
-        }
-
         const res = await api.getProfile();
         if (!active) return;
 
-        const user = res?.user || res;
-
+        const user = res?.data || res;
         if (!user || !user._id) {
-          // ❗ silently ignore
           setLoadingProfile(false);
           return;
         }
 
         const fixedUser = { ...user };
-
         if (
           fixedUser.profilePicture &&
           !fixedUser.profilePicture.startsWith("http")
@@ -57,7 +48,7 @@ export default function Navbar() {
 
         setProfile(fixedUser);
       } catch {
-        // ❗ ignore errors, do not logout
+        // ❗ ignore (guest user)
       } finally {
         active && setLoadingProfile(false);
       }
@@ -81,7 +72,6 @@ export default function Navbar() {
         setDropdown(false);
       }
     };
-
     document.addEventListener("mousedown", handleClick);
     return () =>
       document.removeEventListener("mousedown", handleClick);
@@ -107,7 +97,7 @@ export default function Navbar() {
       await api.logout();
     } catch { }
     setProfile(null);
-    router.push("/login");
+    router.replace("/login");
   };
 
   const DefaultAvatar = () => (
@@ -185,32 +175,41 @@ export default function Navbar() {
 
           {dropdown && (
             <div style={styles.dropdownMenu}>
-              {getAuthToken() ? (
-                <>
-                  <Link href="/profile" legacyBehavior>
-                    <a style={styles.dropdownItem}>Profile</a>
-                  </Link>
-                  <Link href="/settings" legacyBehavior>
-                    <a style={styles.dropdownItem}>Settings</a>
-                  </Link>
-                  <Link href="/saved" legacyBehavior>
-                    <a style={styles.dropdownItem}>⭐ Saved</a>
-                  </Link>
+              <button
+                onClick={() => router.push("/profile")}
+                style={styles.dropdownItem}
+              >
+                Profile
+              </button>
 
-                  <button
-                    onClick={logout}
-                    style={{
-                      ...styles.dropdownItem,
-                      ...styles.logoutBtn,
-                    }}
-                  >
-                    Logout
-                  </button>
-                </>
+              <button
+                onClick={() => router.push("/settings")}
+                style={styles.dropdownItem}
+              >
+                Settings
+              </button>
+
+              <button
+                onClick={() => router.push("/saved")}
+                style={styles.dropdownItem}
+              >
+                ⭐ Saved
+              </button>
+
+              {profile ? (
+                <button
+                  onClick={logout}
+                  style={{ ...styles.dropdownItem, ...styles.logoutBtn }}
+                >
+                  Logout
+                </button>
               ) : (
-                <Link href="/login" legacyBehavior>
-                  <a style={styles.dropdownItem}>Login</a>
-                </Link>
+                <button
+                  onClick={() => router.push("/login")}
+                  style={styles.dropdownItem}
+                >
+                  Login
+                </button>
               )}
             </div>
           )}
@@ -326,6 +325,7 @@ const styles = {
     background: "transparent",
     width: "100%",
     textAlign: "left",
+    cursor: "pointer",
   },
   logoutBtn: { color: "#c92a2a", fontWeight: 700 },
   mobileBtn: { display: "none", fontSize: 22, cursor: "pointer" },
