@@ -12,7 +12,7 @@ import StateSelect from "../components/location/StateSelect";
 import CitySelect from "../components/location/CitySelect";
 import VillageSelect from "../components/location/VillageSelect";
 
-/* 🔐 BACKEND URL (single source of truth) */
+/* 🔐 BACKEND URL */
 const BACKEND =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -24,6 +24,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("All");
 
+  // location (OPTIONAL filter)
   const [country, setCountry] = useState("");
   const [stateCode, setStateCode] = useState("");
   const [cityName, setCityName] = useState("");
@@ -33,22 +34,18 @@ export default function Home() {
   /* ========================= LOAD SAVED LOCATION ========================= */
   useEffect(() => {
     if (typeof window === "undefined") return;
-
     try {
       const saved = JSON.parse(localStorage.getItem("tl_location") || "{}");
       setCountry(saved.country || "");
       setStateCode(saved.state || "");
       setCityName(saved.city || "");
       setVillage(saved.village || "");
-    } catch {
-      /* ignore */
-    }
+    } catch { }
   }, []);
 
   /* ========================= SAVE LOCATION ========================= */
   useEffect(() => {
     if (typeof window === "undefined") return;
-
     localStorage.setItem(
       "tl_location",
       JSON.stringify({
@@ -60,46 +57,41 @@ export default function Home() {
     );
   }, [country, stateCode, cityName, village]);
 
-  /* ========================= LOAD NEWS ========================= */
+  /* ========================= LOAD NEWS (GLOBAL) ========================= */
   const loadNews = useCallback(async () => {
     setLoading(true);
-
     try {
-      const data = await api.getNews();
+      // 🔥 IMPORTANT: NO LOCATION PARAMS
+      const res = await api.get("/news");
+      const list = Array.isArray(res?.data) ? res.data : [];
 
-      const safeData = Array.isArray(data)
-        ? data.filter((n) => {
-            if (!n?._id) {
-              console.warn("⚠️ Dropped news without _id:", n);
-              return false;
-            }
-            return true;
-          })
-        : [];
+      // 🔥 GLOBAL SORT = MOST VIEWED FIRST
+      const sorted = list
+        .filter((n) => n?._id)
+        .sort(
+          (a, b) =>
+            (b.views || 0) - (a.views || 0) ||
+            new Date(b.createdAt) - new Date(a.createdAt)
+        );
 
-      setNews(safeData);
+      setNews(sorted);
     } catch (err) {
       console.warn("Failed to load news:", err);
       setNews([]);
     }
-
     setLoading(false);
   }, []);
 
-  /* 🔁 Reload news when location changes */
   useEffect(() => {
     loadNews();
-  }, [loadNews, country, stateCode, cityName, village]);
+  }, [loadNews]);
 
-  /* ========================= FIX IMAGE ========================= */
-  const fixImage = useCallback(
-    (url) => {
-      if (!url) return "/placeholder.jpg";
-      if (url.startsWith("http")) return url;
-      return `${BACKEND}/${url.replace(/^\//, "")}`;
-    },
-    []
-  );
+  /* ========================= IMAGE FIX ========================= */
+  const fixImage = useCallback((url) => {
+    if (!url) return "/placeholder.jpg";
+    if (url.startsWith("http")) return url;
+    return `${BACKEND}/${url.replace(/^\//, "")}`;
+  }, []);
 
   /* ========================= AUTO LOCATION ========================= */
   const autoLocate = async () => {
@@ -107,39 +99,19 @@ export default function Home() {
       setDetecting(true);
       const res = await fetch("https://ipapi.co/json/");
       const data = await res.json();
-
       setCountry(data.country_code || "");
       setStateCode(data.region_code || "");
       setCityName(data.city || "");
       setVillage("");
     } catch {
-      alert("Location auto-detect failed.");
+      alert("Auto location failed");
     } finally {
       setDetecting(false);
     }
   };
 
-  /* ========================= LOCATION CHANGES ========================= */
-  const changeCountry = (v) => {
-    setCountry(v);
-    setStateCode("");
-    setCityName("");
-    setVillage("");
-  };
-
-  const changeState = (v) => {
-    setStateCode(v);
-    setCityName("");
-    setVillage("");
-  };
-
-  const changeCity = (v) => {
-    setCityName(v);
-    setVillage("");
-  };
-
-  /* ========================= FILTER LOGIC ========================= */
-  const filteredByLocation = news.filter((item) => {
+  /* ========================= LOCATION FILTER (OPTIONAL) ========================= */
+  const locationFiltered = news.filter((item) => {
     if (country && item.location?.country !== country) return false;
     if (stateCode && item.location?.state !== stateCode) return false;
     if (cityName && item.location?.city !== cityName) return false;
@@ -147,33 +119,19 @@ export default function Home() {
     return true;
   });
 
-  const filteredNews =
+  /* ========================= CATEGORY FILTER ========================= */
+  const finalNews =
     activeCategory === "All"
-      ? filteredByLocation
-      : filteredByLocation.filter(
-          (item) =>
-            item.category?.toLowerCase() ===
-            activeCategory.toLowerCase()
-        );
+      ? locationFiltered
+      : locationFiltered.filter(
+        (n) =>
+          n.category?.toLowerCase() ===
+          activeCategory.toLowerCase()
+      );
 
-  const latestNews = filteredNews
-    .slice()
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .map((n) => ({
-      ...n,
-      image: fixImage(n.image),
-    }));
+  const trendingNews = finalNews.slice(0, 10);
 
-  const trendingNews = filteredByLocation
-    .slice()
-    .sort((a, b) => (b.views || 0) - (a.views || 0))
-    .slice(0, 10)
-    .map((n) => ({
-      ...n,
-      image: fixImage(n.image),
-    }));
-
-  /* ========================= LOADING UI ========================= */
+  /* ========================= LOADING ========================= */
   if (loading) {
     return (
       <div style={styles.loadingBox}>
@@ -185,7 +143,7 @@ export default function Home() {
   /* ========================= UI ========================= */
   return (
     <div style={styles.container}>
-      {/* ⭐ Location Bar ⭐ */}
+      {/* ⭐ LOCATION BAR (FILTER ONLY) */}
       <div style={styles.locationBar}>
         <button
           onClick={autoLocate}
@@ -199,14 +157,14 @@ export default function Home() {
         </button>
 
         <div style={styles.itemBox}>
-          <CountrySelect value={country} onChange={changeCountry} />
+          <CountrySelect value={country} onChange={setCountry} />
         </div>
 
         <div style={styles.itemBox}>
           <StateSelect
             countryCode={country}
             value={stateCode}
-            onChange={changeState}
+            onChange={setStateCode}
           />
         </div>
 
@@ -215,7 +173,7 @@ export default function Home() {
             countryCode={country}
             stateCode={stateCode}
             value={cityName}
-            onChange={changeCity}
+            onChange={setCityName}
           />
         </div>
 
@@ -227,28 +185,30 @@ export default function Home() {
               cityName={cityName}
               value={village}
               onChange={setVillage}
-              disableTyping={true}
+              disableTyping
             />
           </div>
         )}
       </div>
 
-      {/* TRENDING */}
-      <h2 style={styles.heading}>🔥 Trending</h2>
+      {/* 🔥 TRENDING (GLOBAL MOST VIEWED) */}
+      <h2 style={styles.heading}>🔥 Most Viewed</h2>
       {trendingNews.length > 0 ? (
         <TrendingSlider items={trendingNews} />
       ) : (
         <p style={styles.emptyText}>No trending news found.</p>
       )}
 
-      {/* CATEGORIES */}
-      <h2 style={{ ...styles.heading, marginTop: 40 }}>Categories</h2>
+      {/* 📂 CATEGORIES */}
+      <h2 style={{ ...styles.heading, marginTop: 40 }}>
+        Categories
+      </h2>
       <CategoryTabs
         active={activeCategory}
         setActive={setActiveCategory}
       />
 
-      {/* LATEST */}
+      {/* 📰 NEWS LIST */}
       <h2
         style={{
           ...styles.heading,
@@ -256,11 +216,14 @@ export default function Home() {
           marginTop: 40,
         }}
       >
-        Latest News
+        News
       </h2>
 
-      {latestNews.length > 0 ? (
-        <NewsList news={latestNews} />
+      {finalNews.length > 0 ? (
+        <NewsList news={finalNews.map((n) => ({
+          ...n,
+          image: fixImage(n.photoUrl),
+        }))} />
       ) : (
         <p style={styles.emptyText}>No news found.</p>
       )}
@@ -275,7 +238,6 @@ const styles = {
     margin: "40px auto",
     padding: "0 18px",
   },
-
   locationBar: {
     background: "#fff",
     padding: "14px 20px",
@@ -285,15 +247,12 @@ const styles = {
     gap: 14,
     overflowX: "auto",
     whiteSpace: "nowrap",
-    flexWrap: "nowrap",
     marginBottom: 35,
   },
-
   itemBox: {
     minWidth: 160,
     display: "inline-block",
   },
-
   autoBtn: {
     padding: "10px 18px",
     background: "#4f46e5",
@@ -302,19 +261,15 @@ const styles = {
     border: "none",
     cursor: "pointer",
     fontWeight: 600,
-    whiteSpace: "nowrap",
   },
-
   heading: {
     fontSize: 24,
     fontWeight: 700,
   },
-
   emptyText: {
     color: "#777",
     fontSize: 16,
   },
-
   loadingBox: {
     textAlign: "center",
     marginTop: 100,
