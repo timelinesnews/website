@@ -7,12 +7,6 @@ import { api } from "../../services/api";
 import CommentBox from "../../components/comments/CommentBox";
 import CommentList from "../../components/comments/CommentList";
 
-/* 🔐 BACKEND URL */
-const BACKEND =
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  process.env.NEXT_PUBLIC_BACKEND ||
-  "https://backend-7752.onrender.com";
-
 export default function NewsView() {
   const router = useRouter();
   const { id } = router.query;
@@ -22,7 +16,7 @@ export default function NewsView() {
   const [comments, setComments] = useState([]);
   const [loadingNews, setLoadingNews] = useState(true);
   const [loadingComments, setLoadingComments] = useState(false);
-  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
 
   /* =========================
      SAFE NEWS ID
@@ -49,30 +43,28 @@ export default function NewsView() {
   ========================= */
   const loadNews = useCallback(async () => {
     if (!safeId) {
-      setMsg("❌ Invalid news link");
+      setError("Invalid news link");
       setLoadingNews(false);
       return;
     }
 
-    setLoadingNews(true);
-    setMsg("");
-
     try {
-      const res = await api.getNewsById(safeId);
-      const data = res?.data || res || null;
+      setLoadingNews(true);
+      setError("");
 
-      if (!data || !(data._id || data.id)) {
+      const res = await api.getNewsById(safeId);
+      const data = res?.data || res;
+
+      if (!data?._id) {
+        setError("News not found");
         setNews(null);
-        setMsg("News not found");
-      } else {
-        setNews({
-          ...data,
-          _id: data._id || data.id,
-        });
+        return;
       }
+
+      setNews(data);
     } catch (err) {
       console.error("Load news error:", err);
-      setMsg("❌ Failed to load news");
+      setError("Failed to load news");
       setNews(null);
     } finally {
       setLoadingNews(false);
@@ -84,8 +76,8 @@ export default function NewsView() {
   ========================= */
   const loadComments = useCallback(async (newsId) => {
     if (!newsId) return;
-    setLoadingComments(true);
     try {
+      setLoadingComments(true);
       const list = await api.getComments(newsId);
       setComments(Array.isArray(list) ? list : []);
     } catch {
@@ -109,51 +101,34 @@ export default function NewsView() {
   }, [news?._id, loadComments]);
 
   /* =========================
-     IMAGE HELPERS (FIXED)
-  ========================= */
-  const getNewsImage = () => {
-    if (!news?.photoUrl) return "/placeholder.jpg";
-
-    if (news.photoUrl.startsWith("http")) {
-      return news.photoUrl; // Cloudinary
-    }
-
-    return `${BACKEND}/${news.photoUrl.replace(/^\/+/, "")}`; // backend image
-  };
-
-  /* =========================
-     DELETE POST
+     DELETE POST (OWNER ONLY)
   ========================= */
   const deletePost = async () => {
     if (!news?._id) return;
     if (!confirm("Delete this post permanently?")) return;
     try {
-      await api.deleteNews(news._id);
-      router.push("/profile/posts");
+      await api.delete(`/news/${news._id}`);
+      router.push("/profile");
     } catch {
-      alert("Error deleting post");
+      alert("Failed to delete post");
     }
   };
 
   /* =========================
-     LOADING / NOT FOUND
+     LOADING / ERROR
   ========================= */
   if (loadingNews) {
-    return <div style={{ textAlign: "center", marginTop: 80 }}>⏳ Loading…</div>;
+    return <div style={styles.center}>⏳ Loading…</div>;
   }
 
   if (!news) {
-    return (
-      <div style={{ textAlign: "center", marginTop: 80, color: "red" }}>
-        {msg || "News not found"}
-      </div>
-    );
+    return <div style={{ ...styles.center, color: "red" }}>{error}</div>;
   }
 
   /* =========================
-     OWNER / ADMIN
+     OWNER CHECK
   ========================= */
-  const isOwner = profile && profile._id === news.user?.id;
+  const isOwner = profile && profile._id === news.user?._id;
   const isAdmin = profile?.role === "admin";
 
   /* =========================
@@ -168,12 +143,10 @@ export default function NewsView() {
     .filter(Boolean)
     .join(", ");
 
-  const pageTitle = `${news.headline} | TIMELINES`;
-
   return (
     <>
       <Head>
-        <title>{pageTitle}</title>
+        <title>{news.headline} | TIMELINES</title>
         <meta
           name="description"
           content={(news.content || "")
@@ -192,15 +165,15 @@ export default function NewsView() {
           )}
         </div>
 
-        {/* NEWS IMAGE */}
-        <img
-          src={getNewsImage()}
-          alt={news.headline}
-          style={styles.mainImage}
-          onError={(e) => {
-            e.currentTarget.src = "/placeholder.jpg";
-          }}
-        />
+        {news.photoUrl && (
+          <img
+            src={news.photoUrl}
+            alt={news.headline}
+            style={styles.mainImage}
+            loading="lazy"
+            onError={(e) => (e.currentTarget.style.display = "none")}
+          />
+        )}
 
         <div style={styles.metaRow}>
           <span>
@@ -239,15 +212,15 @@ export default function NewsView() {
             onSubmit={() => loadComments(news._id)}
           />
         ) : (
-          <p style={{ color: "#888" }}>
-            <Link href="/login">Sign in</Link> to comment.
+          <p style={{ color: "#777" }}>
+            <Link href="/login">Sign in</Link> to comment
           </p>
         )}
 
         {loadingComments ? (
           <p>⏳ Loading comments…</p>
         ) : comments.length === 0 ? (
-          <p style={{ color: "#888" }}>No comments yet. Be the first!</p>
+          <p style={{ color: "#777" }}>No comments yet</p>
         ) : (
           <CommentList
             comments={comments}
@@ -264,6 +237,7 @@ export default function NewsView() {
    STYLES
 ========================= */
 const styles = {
+  center: { textAlign: "center", marginTop: 80 },
   container: { maxWidth: 850, margin: "30px auto", padding: "0 16px" },
   headline: { fontSize: 30, fontWeight: 800 },
   badgeRow: { display: "flex", gap: 10, marginBottom: 14 },
@@ -276,9 +250,23 @@ const styles = {
     maxHeight: 420,
     objectFit: "cover",
   },
-  metaRow: { display: "flex", justifyContent: "space-between", fontSize: 14 },
+  metaRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    fontSize: 14,
+  },
   description: { fontSize: 17, lineHeight: 1.7, marginTop: 20 },
   ownerRow: { marginTop: 14, display: "flex", gap: 10 },
-  editBtn: { padding: "8px 14px", background: "#1971c2", color: "white" },
-  deleteBtn: { padding: "8px 14px", background: "#ff4d4d", color: "white" },
+  editBtn: {
+    padding: "8px 14px",
+    background: "#2563eb",
+    color: "white",
+    borderRadius: 8,
+  },
+  deleteBtn: {
+    padding: "8px 14px",
+    background: "#dc2626",
+    color: "white",
+    borderRadius: 8,
+  },
 };

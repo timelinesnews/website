@@ -10,38 +10,25 @@ export default function ProfilePage() {
   const [myPosts, setMyPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [showFollowers, setShowFollowers] = useState(false);
-  const [showFollowing, setShowFollowing] = useState(false);
-
   /* ================= LOAD PROFILE ================= */
   const loadProfile = useCallback(async () => {
     try {
-      const profile = await api.getProfile();
-      if (!profile) {
+      // 🔐 logged-in user
+      const profileRes = await api.getProfile();
+      const u = profileRes?.user || profileRes;
+
+      if (!u?._id) {
         router.replace("/login");
         return;
       }
 
-      const u = profile.user || profile;
       setUser(u);
 
-      /* LOAD MY POSTS */
-      const res = await api.getNews();
-      const list = Array.isArray(res) ? res : res?.data || [];
+      // 🔥 LOAD ONLY USER POSTS (NEW API)
+      const res = await api.get(`/news/user/${u._id}`);
+      const list = res?.data || [];
 
-      const posts = list
-        .filter(
-          (n) =>
-            n?.user?.id === u._id ||
-            n?.userId === u._id
-        )
-        .map((n) => ({
-          ...n,
-          _id: n._id || n.id,
-        }))
-        .filter((n) => n._id);
-
-      setMyPosts(posts);
+      setMyPosts(list);
     } catch (err) {
       console.error("Profile load error:", err);
     } finally {
@@ -61,23 +48,25 @@ export default function ProfilePage() {
   /* ================= POST CARD ================= */
   const PostCard = ({ item }) => {
     const openPost = () => {
-      if (!item?._id) return;
       router.push(`/news/${item._id}`);
     };
 
     return (
-      <div style={styles.postCard} onClick={openPost}>
-        <h3 style={styles.postTitle}>{item.headline}</h3>
+      <div style={styles.postCard}>
+        <h3 style={styles.postTitle} onClick={openPost}>
+          {item.headline}
+        </h3>
 
-        <img
-          src={item.photoUrl || "/placeholder.jpg"}
-          alt={item.headline}
-          loading="lazy"
-          style={styles.postImage}
-          onError={(e) => {
-            e.currentTarget.src = "/placeholder.jpg";
-          }}
-        />
+        {item.photoUrl && (
+          <img
+            src={item.photoUrl}
+            alt={item.headline}
+            loading="lazy"
+            style={styles.postImage}
+            onError={(e) => (e.currentTarget.style.display = "none")}
+            onClick={openPost}
+          />
+        )}
 
         <p style={styles.postDesc}>
           {(item.content || "")
@@ -85,6 +74,27 @@ export default function ProfilePage() {
             .slice(0, 120)}
           …
         </p>
+
+        {/* 🔒 OWNER ACTIONS */}
+        <div style={styles.actionRow}>
+          <button
+            style={styles.editBtn}
+            onClick={() => router.push(`/news/edit/${item._id}`)}
+          >
+            ✏️ Edit
+          </button>
+
+          <button
+            style={styles.deleteBtn}
+            onClick={async () => {
+              if (!confirm("Delete this post?")) return;
+              await api.delete(`/news/${item._id}`);
+              setMyPosts((prev) => prev.filter((p) => p._id !== item._id));
+            }}
+          >
+            🗑️ Delete
+          </button>
+        </div>
       </div>
     );
   };
@@ -101,30 +111,29 @@ export default function ProfilePage() {
   return (
     <>
       <Head>
-        <title>{user.name} (@{user.username}) | TIMELINES</title>
+        <title>
+          {user.firstName} {user.lastName} (@{user.username}) | TIMELINES
+        </title>
       </Head>
 
       <div style={styles.wrapper}>
         <div style={styles.cover}></div>
 
         <div style={styles.profileTopCard}>
-          <div style={styles.avatarWrapper}>
-            <img
-              src={user.avatar || "/default-user.png"}
-              alt={user.name}
-              style={styles.avatar}
-              onError={(e) => {
-                e.currentTarget.src = "/default-user.png";
-              }}
-            />
-          </div>
+          <img
+            src={user.profilePicture || "/default-user.png"}
+            alt={user.username}
+            style={styles.avatar}
+            onError={(e) => (e.currentTarget.src = "/default-user.png")}
+          />
 
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.name}>{user.name}</div>
-            <div style={styles.username}>@{user.username}</div>
-            <div style={styles.location}>
-              📍 {user.city}, {user.state}, {user.country}
-            </div>
+          <div style={styles.name}>
+            {user.firstName} {user.lastName}
+          </div>
+          <div style={styles.username}>@{user.username}</div>
+
+          <div style={styles.location}>
+            📍 {user.city}, {user.state}, {user.country}
           </div>
 
           <div style={styles.btnRow}>
@@ -147,13 +156,9 @@ export default function ProfilePage() {
         <h2 style={styles.sectionTitle}>My Posts</h2>
 
         {myPosts.length === 0 ? (
-          <div style={styles.empty}>
-            You haven't posted anything yet.
-          </div>
+          <div style={styles.empty}>You haven't posted anything yet.</div>
         ) : (
-          myPosts.map((item) => (
-            <PostCard key={item._id} item={item} />
-          ))
+          myPosts.map((item) => <PostCard key={item._id} item={item} />)
         )}
       </div>
     </>
@@ -174,35 +179,59 @@ const styles = {
     borderRadius: 16,
     textAlign: "center",
   },
-  avatarWrapper: { display: "flex", justifyContent: "center" },
   avatar: {
     width: 110,
     height: 110,
     borderRadius: "50%",
     objectFit: "cover",
+    marginBottom: 10,
   },
   name: { fontSize: 23, fontWeight: 800 },
   username: { color: "#777" },
-  location: { fontSize: 14, color: "#555" },
+  location: { fontSize: 14, color: "#555", marginTop: 4 },
   btnRow: { display: "flex", gap: 12, justifyContent: "center", marginTop: 18 },
-  btn: { padding: "8px 16px", borderRadius: 10 },
+  btn: {
+    padding: "8px 16px",
+    borderRadius: 10,
+    border: "1px solid #ddd",
+    cursor: "pointer",
+  },
   sectionTitle: { fontSize: 22, fontWeight: 700, marginTop: 30 },
   postCard: {
     background: "#fff",
     padding: 18,
     borderRadius: 16,
     marginBottom: 16,
-    cursor: "pointer",
   },
-  postTitle: { fontSize: 18, fontWeight: 700 },
+  postTitle: { fontSize: 18, fontWeight: 700, cursor: "pointer" },
   postImage: {
     width: "100%",
     height: 220,
     objectFit: "cover",
     borderRadius: 14,
     margin: "10px 0",
+    cursor: "pointer",
   },
   postDesc: { color: "#444" },
+  actionRow: {
+    display: "flex",
+    gap: 10,
+    marginTop: 10,
+  },
+  editBtn: {
+    padding: "6px 12px",
+    borderRadius: 8,
+    border: "1px solid #ccc",
+    cursor: "pointer",
+  },
+  deleteBtn: {
+    padding: "6px 12px",
+    borderRadius: 8,
+    border: "1px solid #fca5a5",
+    background: "#fee2e2",
+    color: "#b91c1c",
+    cursor: "pointer",
+  },
   empty: { textAlign: "center", marginTop: 40 },
   loading: { textAlign: "center", marginTop: 60 },
 };
