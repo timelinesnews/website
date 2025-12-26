@@ -7,6 +7,21 @@ import { api } from "../../services/api";
 import CommentBox from "../../components/comments/CommentBox";
 import CommentList from "../../components/comments/CommentList";
 
+/* 🔐 BACKEND */
+const BACKEND =
+  process.env.NEXT_PUBLIC_BACKEND ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "https://backend-7752.onrender.com";
+
+/* =========================
+   IMAGE NORMALIZER
+========================= */
+const normalizeUrl = (url) => {
+  if (!url || typeof url !== "string") return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${BACKEND}/${url.replace(/^\/+/, "")}`;
+};
+
 export default function NewsView() {
   const router = useRouter();
   const { id } = router.query;
@@ -91,21 +106,22 @@ export default function NewsView() {
      INITIAL LOAD
   ========================= */
   useEffect(() => {
-    if (!safeId) return;
+    if (!router.isReady) return;
     loadProfile();
     loadNews();
-  }, [safeId, loadProfile, loadNews]);
+  }, [router.isReady, loadProfile, loadNews]);
 
   useEffect(() => {
     if (news?._id) loadComments(news._id);
   }, [news?._id, loadComments]);
 
   /* =========================
-     DELETE POST (OWNER ONLY)
+     DELETE POST (OWNER / ADMIN)
   ========================= */
   const deletePost = async () => {
     if (!news?._id) return;
     if (!confirm("Delete this post permanently?")) return;
+
     try {
       await api.delete(`/news/${news._id}`);
       router.push("/profile");
@@ -122,7 +138,11 @@ export default function NewsView() {
   }
 
   if (!news) {
-    return <div style={{ ...styles.center, color: "red" }}>{error}</div>;
+    return (
+      <div style={{ ...styles.center, color: "red" }}>
+        {error || "News not found"}
+      </div>
+    );
   }
 
   /* =========================
@@ -143,6 +163,16 @@ export default function NewsView() {
     .filter(Boolean)
     .join(", ");
 
+  /* =========================
+     IMAGE
+  ========================= */
+  const imageSrc =
+    normalizeUrl(news.photoUrl) ||
+    normalizeUrl(news.image) ||
+    normalizeUrl(news.cover) ||
+    normalizeUrl(news.thumbnail) ||
+    null;
+
   return (
     <>
       <Head>
@@ -159,15 +189,17 @@ export default function NewsView() {
         <h1 style={styles.headline}>{news.headline}</h1>
 
         <div style={styles.badgeRow}>
-          <span style={styles.category}>{news.category}</span>
+          {news.category && (
+            <span style={styles.category}>{news.category}</span>
+          )}
           {locationText && (
             <span style={styles.location}>📍 {locationText}</span>
           )}
         </div>
 
-        {news.photoUrl && (
+        {imageSrc && (
           <img
-            src={news.photoUrl}
+            src={imageSrc}
             alt={news.headline}
             style={styles.mainImage}
             loading="lazy"
@@ -179,7 +211,11 @@ export default function NewsView() {
           <span>
             📅{" "}
             {news.createdAt
-              ? new Date(news.createdAt).toLocaleDateString()
+              ? new Date(news.createdAt).toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
               : "—"}
           </span>
           <span>👁 {news.views || 0} views</span>
@@ -254,6 +290,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     fontSize: 14,
+    color: "#555",
   },
   description: { fontSize: 17, lineHeight: 1.7, marginTop: 20 },
   ownerRow: { marginTop: 14, display: "flex", gap: 10 },
@@ -262,11 +299,15 @@ const styles = {
     background: "#2563eb",
     color: "white",
     borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
   },
   deleteBtn: {
     padding: "8px 14px",
     background: "#dc2626",
     color: "white",
     borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
   },
 };

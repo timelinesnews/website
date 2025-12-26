@@ -30,6 +30,12 @@ export const setAuthToken = (token) => {
   else localStorage.removeItem(AUTH_KEY);
 };
 
+export const setAdminToken = (token) => {
+  if (typeof window === "undefined") return;
+  if (token) localStorage.setItem(ADMIN_KEY, token);
+  else localStorage.removeItem(ADMIN_KEY);
+};
+
 export const getAuthToken = () => {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(AUTH_KEY);
@@ -51,10 +57,7 @@ instance.interceptors.request.use(
     }
 
     if (typeof window !== "undefined") {
-      const admin = getAdminToken();
-      const user = getAuthToken();
-      const token = admin || user;
-
+      const token = getAdminToken() || getAuthToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -99,36 +102,11 @@ export const api = {
     if (!idToken) return { error: "Missing token" };
     try {
       const res = await instance.post("/auth/firebase-login", { idToken });
-      const data = res?.data;
-
+      const data = safe(res);
       const token =
-        data?.token ||
-        data?.data?.token ||
-        data?.accessToken;
+        data?.token || data?.data?.token || data?.accessToken;
 
       if (token) setAuthToken(token);
-      else console.error("❌ Firebase login token missing", data);
-
-      return data;
-    } catch (err) {
-      return { error: errOut(err) };
-    }
-  },
-
-  firebaseLoginAndStoreToken: async (idToken) => {
-    if (!idToken) return { error: "Missing token" };
-    try {
-      const res = await instance.post("/auth/firebase-login", { idToken });
-      const data = res?.data;
-
-      const token =
-        data?.token ||
-        data?.data?.token ||
-        data?.accessToken;
-
-      if (token) setAuthToken(token);
-      else console.error("❌ Firebase login token missing", data);
-
       return data;
     } catch (err) {
       return { error: errOut(err) };
@@ -136,32 +114,27 @@ export const api = {
   },
 
   /* ============================
-       👤 BASIC AUTH (🔥 FIXED)
+       👤 BASIC AUTH
   ============================ */
   login: async (payload) => {
     try {
-      // 1️⃣ login request
       const res = await instance.post("/auth/login", payload);
-      const data = res?.data;
+      const data = safe(res);
 
       const token =
-        data?.token ||
-        data?.data?.token ||
-        data?.accessToken;
+        data?.token || data?.data?.token || data?.accessToken;
 
       if (!token) {
         return { error: { message: "Login token missing" } };
       }
 
-      // 2️⃣ store token
       setAuthToken(token);
 
-      // 3️⃣ verify user immediately (KEY FIX)
       const me = await instance.get("/auth/me");
 
       return {
         success: true,
-        user: me?.data?.data || me?.data,
+        user: safe(me)?.data || safe(me),
       };
     } catch (err) {
       return { error: errOut(err) };
@@ -179,6 +152,7 @@ export const api = {
 
   logout: async () => {
     setAuthToken(null);
+    setAdminToken(null);
     return { success: true };
   },
 
@@ -263,6 +237,26 @@ export const api = {
       return safe(res)?.data ?? null;
     } catch {
       return null;
+    }
+  },
+
+  getUserPosts: async (userId) => {
+    if (!userId) return [];
+    try {
+      const res = await instance.get(`/news/user/${userId}`);
+      return safe(res) ?? [];
+    } catch {
+      return [];
+    }
+  },
+
+  deleteNews: async (id) => {
+    if (!id) return { error: "Missing news id" };
+    try {
+      const res = await instance.delete(`/news/${id}`);
+      return safe(res);
+    } catch (err) {
+      return { error: errOut(err) };
     }
   },
 

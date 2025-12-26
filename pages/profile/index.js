@@ -9,7 +9,7 @@ export default function ProfilePage() {
   const [user, setUser] = useState(null);
   const [myPosts, setMyPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("posts"); // posts | followers | following
+  const [tab, setTab] = useState("posts"); // posts | followers | following | analytics
 
   /* ================= LOAD PROFILE ================= */
   const loadProfile = useCallback(async () => {
@@ -20,53 +20,42 @@ export default function ProfilePage() {
     }
 
     try {
+      setLoading(true);
+
       const profileRes = await api.getProfile();
       const raw = profileRes?.user || profileRes;
       const userId = raw?._id || raw?.id;
 
-      if (!userId) {
-        setLoading(false);
-        return;
-      }
+      if (!userId) return;
 
       const normalizedUser = {
         ...raw,
         _id: String(userId),
-        followers: raw?.followers || [],
-        following: raw?.following || [],
+        followers: Array.isArray(raw?.followers) ? raw.followers : [],
+        following: Array.isArray(raw?.following) ? raw.following : [],
       };
 
       setUser(normalizedUser);
 
-      try {
-        const res = await api.get(`/news/user/${normalizedUser._id}`);
-        setMyPosts(res?.data || []);
-      } catch {
-        setMyPosts([]);
-      }
+      /* 🔥 SAFE: use API helper (nothing removed) */
+      const posts = await api.getUserPosts(normalizedUser._id);
+      setMyPosts(Array.isArray(posts) ? posts : []);
     } catch (err) {
       console.warn("Profile load error:", err?.message);
+      setMyPosts([]);
     } finally {
       setLoading(false);
     }
   }, [router]);
 
   useEffect(() => {
+    if (!router.isReady) return;
     loadProfile();
-  }, [loadProfile]);
+  }, [router.isReady, loadProfile]);
 
   /* ================= STATES ================= */
   if (loading) {
     return <div style={styles.loading}>⏳ Loading profile…</div>;
-  }
-
-  if (!user && getAuthToken()) {
-    return (
-      <div style={styles.loading}>
-        ⏳ Preparing your profile…
-        <p style={{ color: "#666" }}>Please wait a moment</p>
-      </div>
-    );
   }
 
   if (!user) {
@@ -82,20 +71,62 @@ export default function ProfilePage() {
 
   /* ================= COUNTS ================= */
   const postsCount = myPosts.length;
-  const followersCount = Array.isArray(user.followers)
-    ? user.followers.length
-    : Number(user.followers || 0);
-  const followingCount = Array.isArray(user.following)
-    ? user.following.length
-    : Number(user.following || 0);
+  const followersCount = user.followers.length;
+  const followingCount = user.following.length;
+
+  /* ================= DELETE POST ================= */
+  const handleDelete = async (id) => {
+    if (!confirm("Are you sure you want to delete this post?")) return;
+
+    const res = await api.deleteNews(id);
+    if (!res?.error) {
+      setMyPosts((prev) => prev.filter((p) => p._id !== id));
+    } else {
+      alert("Failed to delete post");
+    }
+  };
 
   /* ================= POST CARD ================= */
   const PostCard = ({ item }) => (
-    <div
-      style={styles.postCard}
-      onClick={() => router.push(`/news/${item._id}`)}
-    >
-      <h3 style={styles.postTitle}>{item.headline}</h3>
+    <div style={styles.postCard}>
+      <div
+        style={{ cursor: "pointer" }}
+        onClick={() => router.push(`/news/${item._id}`)}
+      >
+        <h3 style={styles.postTitle}>{item.headline}</h3>
+
+        {item.status && (
+          <span
+            style={{
+              fontSize: 12,
+              color:
+                item.status === "approved"
+                  ? "green"
+                  : item.status === "rejected"
+                    ? "red"
+                    : "#ca8a04",
+            }}
+          >
+            {item.status.toUpperCase()}
+          </span>
+        )}
+      </div>
+
+      {/* OWNER ACTIONS */}
+      <div style={styles.postActions}>
+        <button
+          style={styles.smallBtn}
+          onClick={() => router.push(`/news/edit/${item._id}`)}
+        >
+          ✏️ Edit
+        </button>
+        <button
+          style={{ ...styles.smallBtn, color: "#b91c1c" }}
+          onClick={() => handleDelete(item._id)}
+        >
+          🗑 Delete
+        </button>
+      </div>
     </div>
   );
 
@@ -118,13 +149,21 @@ export default function ProfilePage() {
               <span style={{ marginLeft: 6, color: "#3b82f6" }}>✔️</span>
             )}
           </div>
-          <div style={{ fontSize: 13, color: "#666" }}>
-            @{u.username}
-          </div>
+          <div style={{ fontSize: 13, color: "#666" }}>@{u.username}</div>
         </div>
       </div>
     );
   };
+
+  /* ================= ANALYTICS ================= */
+  const totalViews = myPosts.reduce(
+    (sum, p) => sum + (Number(p.views) || 0),
+    0
+  );
+  const totalLikes = myPosts.reduce(
+    (sum, p) => sum + (Number(p.likesCount) || 0),
+    0
+  );
 
   return (
     <>
@@ -154,76 +193,29 @@ export default function ProfilePage() {
 
           <div style={styles.username}>@{user.username}</div>
 
-          {user.bio && (
-            <p style={styles.bio}>{user.bio}</p>
-          )}
+          {user.bio && <p style={styles.bio}>{user.bio}</p>}
 
           <div style={styles.location}>
             📍 {user.city}, {user.state}, {user.country}
           </div>
 
-          {user.createdAt && (
-            <div style={styles.memberSince}>
-              Member since{" "}
-              {new Date(user.createdAt).toLocaleDateString("en-IN", {
-                month: "short",
-                year: "numeric",
-              })}
-            </div>
-          )}
-
-          {/* ===== STATS ===== */}
           <div style={styles.statsRow}>
-            <div
-              onClick={() => setTab("posts")}
-              style={{
-                ...styles.statBox,
-                ...(tab === "posts" ? styles.activeStat : {}),
-              }}
-            >
+            <div onClick={() => setTab("posts")} style={styles.statBox}>
               <b>{postsCount}</b>
               <span>Posts</span>
             </div>
-
-            <div
-              onClick={() => setTab("followers")}
-              style={{
-                ...styles.statBox,
-                ...(tab === "followers" ? styles.activeStat : {}),
-              }}
-            >
+            <div onClick={() => setTab("followers")} style={styles.statBox}>
               <b>{followersCount}</b>
               <span>Followers</span>
             </div>
-
-            <div
-              onClick={() => setTab("following")}
-              style={{
-                ...styles.statBox,
-                ...(tab === "following" ? styles.activeStat : {}),
-              }}
-            >
+            <div onClick={() => setTab("following")} style={styles.statBox}>
               <b>{followingCount}</b>
               <span>Following</span>
             </div>
-          </div>
-
-          <div style={styles.btnRow}>
-            <button
-              style={styles.btn}
-              onClick={() => router.push("/profile/edit")}
-            >
-              ✏️ Edit Profile
-            </button>
-            <button
-              style={{ ...styles.btn, background: "#fee2e2", color: "#b91c1c" }}
-              onClick={() => {
-                api.logout();
-                router.replace("/login");
-              }}
-            >
-              🚪 Logout
-            </button>
+            <div onClick={() => setTab("analytics")} style={styles.statBox}>
+              <b>📊</b>
+              <span>Analytics</span>
+            </div>
           </div>
         </div>
 
@@ -249,6 +241,18 @@ export default function ProfilePage() {
             ) : (
               user.following.map((u, i) => <UserRow key={i} u={u} />)
             ))}
+
+          {tab === "analytics" && (
+            <div style={styles.analyticsBox}>
+              <h3>📊 Post Analytics</h3>
+              <p>Total Posts: {postsCount}</p>
+              <p>Total Views: {totalViews}</p>
+              <p>Total Likes: {totalLikes}</p>
+              <p style={{ fontSize: 13, color: "#777" }}>
+                Detailed graphs coming soon
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -278,52 +282,36 @@ const styles = {
   },
   name: { fontSize: 23, fontWeight: 800 },
   username: { color: "#777" },
-  bio: {
-    fontSize: 14,
-    color: "#444",
-    marginTop: 6,
-    maxWidth: 520,
-    marginInline: "auto",
-  },
+  bio: { fontSize: 14, color: "#444", marginTop: 6 },
   location: { fontSize: 14, color: "#555", marginTop: 4 },
-  memberSince: { fontSize: 12, color: "#777", marginTop: 4 },
 
   statsRow: {
     display: "flex",
     justifyContent: "space-around",
     marginTop: 18,
   },
-  statBox: {
-    cursor: "pointer",
-    textAlign: "center",
-    paddingBottom: 6,
-  },
-  activeStat: {
-    borderBottom: "2px solid #2563eb",
-  },
-
-  btnRow: {
-    display: "flex",
-    gap: 12,
-    justifyContent: "center",
-    marginTop: 18,
-  },
-  btn: {
-    padding: "8px 16px",
-    borderRadius: 10,
-    border: "1px solid #ddd",
-    cursor: "pointer",
-    fontWeight: 600,
-  },
+  statBox: { cursor: "pointer", textAlign: "center" },
 
   postCard: {
     background: "#fff",
     padding: 16,
     borderRadius: 14,
     marginBottom: 12,
-    cursor: "pointer",
   },
   postTitle: { fontSize: 17, fontWeight: 700 },
+
+  postActions: {
+    display: "flex",
+    gap: 10,
+    marginTop: 10,
+  },
+  smallBtn: {
+    padding: "6px 12px",
+    borderRadius: 8,
+    border: "1px solid #ddd",
+    cursor: "pointer",
+    background: "#f9fafb",
+  },
 
   userRow: {
     display: "flex",
@@ -339,6 +327,12 @@ const styles = {
     height: 44,
     borderRadius: "50%",
     objectFit: "cover",
+  },
+
+  analyticsBox: {
+    background: "#fff",
+    padding: 20,
+    borderRadius: 14,
   },
 
   empty: { textAlign: "center", marginTop: 30, color: "#666" },
