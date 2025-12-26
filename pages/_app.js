@@ -3,6 +3,7 @@ import "../styles/globals.css";
 import Layout from "../components/Layout";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
+import Script from "next/script";
 
 /* ======================================================
    TOP LOADING BAR (Route Change Indicator)
@@ -40,10 +41,7 @@ export default function MyApp({ Component, pageProps }) {
      Routes WITHOUT layout/navbar
      (Auth & full-screen pages)
   ------------------------------------------------------ */
-  const noLayoutRoutes = [
-    "/login",
-    "/signup",
-  ];
+  const noLayoutRoutes = ["/login", "/signup"];
 
   /* ------------------------------------------------------
      ROUTE CHANGE EVENTS
@@ -78,6 +76,23 @@ export default function MyApp({ Component, pageProps }) {
   ------------------------------------------------------ */
   return (
     <>
+      {/* ================= GOOGLE ANALYTICS (GA4) ================= */}
+      <Script
+        strategy="afterInteractive"
+        src="https://www.googletagmanager.com/gtag/js?id=G-QLVCHDFFZV"
+      />
+
+      <Script strategy="afterInteractive">
+        {`
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-QLVCHDFFZV', {
+            page_path: window.location.pathname,
+          });
+        `}
+      </Script>
+
       {/* Global Route Loading Bar */}
       {isRouteLoading && <LoadingBar />}
 
