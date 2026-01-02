@@ -7,6 +7,11 @@ import { useRouter } from "next/router";
 // Location
 import CountrySelect from "../components/location/CountrySelect";
 
+/* ===============================
+   REGEX
+=============================== */
+const locationRegex = /^[A-Za-z\s]{0,50}$/;
+
 export default function Create() {
   const router = useRouter();
 
@@ -39,11 +44,6 @@ export default function Create() {
     "Crime",
     "Other",
   ];
-
-  /* ===============================
-      REGEX (alphabets only)
-  =============================== */
-  const locationRegex = /^[A-Za-z\s]{2,50}$/;
 
   /* ===============================
       AUTH
@@ -122,16 +122,8 @@ export default function Create() {
 
     if (!form.category) return "Please select a category.";
     if (!form.country) return "Country is required.";
-
-    if (!locationRegex.test(form.state))
-      return "State must contain only alphabets.";
-
-    if (!locationRegex.test(form.city))
-      return "City must contain only alphabets.";
-
-    if (form.village && !locationRegex.test(form.village))
-      return "Village must contain only alphabets.";
-
+    if (!form.state.trim()) return "State is required.";
+    if (!form.city.trim()) return "City is required.";
     if (!image) return "Please upload an image.";
 
     return null;
@@ -168,15 +160,15 @@ export default function Create() {
       if (res?.success) {
         setMsg("✅ News posted successfully!");
 
-        setForm((prev) => ({
-          ...prev,
+        setForm({
           headline: "",
           content: "",
           category: "",
+          country: form.country,
           state: "",
           city: "",
           village: "",
-        }));
+        });
 
         setImage(null);
         setPreview(null);
@@ -208,6 +200,8 @@ export default function Create() {
 
           <form onSubmit={submit} style={styles.form}>
             <input
+              id="headline"
+              name="headline"
               placeholder="Headline"
               value={form.headline}
               onChange={(e) => updateField("headline", e.target.value)}
@@ -215,6 +209,8 @@ export default function Create() {
             />
 
             <textarea
+              id="content"
+              name="content"
               placeholder="Write full news content…"
               value={form.content}
               onChange={(e) => updateField("content", e.target.value)}
@@ -222,6 +218,8 @@ export default function Create() {
             />
 
             <select
+              id="category"
+              name="category"
               value={form.category}
               onChange={(e) => updateField("category", e.target.value)}
               style={styles.input}
@@ -236,43 +234,49 @@ export default function Create() {
             <CountrySelect value={form.country} onChange={changeCountry} />
 
             <input
+              id="state"
+              name="state"
               placeholder="Enter State"
               value={form.state}
               onChange={(e) => {
                 const v = e.target.value;
-                if (v === "" || locationRegex.test(v)) {
-                  updateField("state", v);
-                }
+                if (locationRegex.test(v)) updateField("state", v);
               }}
               style={styles.input}
             />
 
             <input
+              id="city"
+              name="city"
               placeholder="Enter City"
               value={form.city}
               onChange={(e) => {
                 const v = e.target.value;
-                if (v === "" || locationRegex.test(v)) {
-                  updateField("city", v);
-                }
+                if (locationRegex.test(v)) updateField("city", v);
               }}
               style={styles.input}
             />
 
             <input
+              id="village"
+              name="village"
               placeholder="Enter Village (optional)"
               value={form.village}
               onChange={(e) => {
                 const v = e.target.value;
-                if (v === "" || locationRegex.test(v)) {
-                  updateField("village", v);
-                }
+                if (locationRegex.test(v)) updateField("village", v);
               }}
               style={styles.input}
             />
 
             {/* IMAGE */}
-            <input type="file" accept="image/*" onChange={handleImage} />
+            <input
+              id="photo"
+              name="photo"
+              type="file"
+              accept="image/*"
+              onChange={handleImage}
+            />
             {preview && <img src={preview} style={styles.preview} />}
 
             <button disabled={isLoading} style={styles.btn}>
