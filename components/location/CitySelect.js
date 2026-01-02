@@ -3,10 +3,9 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 /* ============================================================
-   CitySelect (Dropdown + Type)
-   - Shows existing cities
-   - Allows typing new city
-   - Alphabets only
+   CitySelect (Type + Optional Dropdown)
+   - City manually type ho sakdi aa
+   - Existing cities backend ton suggest hon
 ============================================================ */
 
 const locationRegex = /^[A-Za-z\s]{0,50}$/;
@@ -16,10 +15,9 @@ const normalize = (t = "") =>
 
 export default function CitySelect({
   countryCode,
-  stateCode,
   value,
   onChange,
-  placeholder = "Enter or Select City",
+  placeholder = "Enter City",
   className = "",
   style = {},
   disabled = false,
@@ -33,12 +31,13 @@ export default function CitySelect({
     "https://backend-7752.onrender.com/api/v1";
 
   /* ============================================================
-     LOAD CITIES (backend)
+     LOAD CITIES (OPTIONAL SUGGESTIONS)
+     🔥 stateCode dependency removed
   ============================================================ */
   useEffect(() => {
     let mounted = true;
 
-    if (!countryCode || !stateCode) {
+    if (!countryCode) {
       setCities([]);
       return;
     }
@@ -46,12 +45,9 @@ export default function CitySelect({
     async function loadCities() {
       setLoading(true);
       try {
-        const res = await axios.get(
-          `${base}/locations/cities`,
-          {
-            params: { countryCode, stateCode },
-          }
-        );
+        const res = await axios.get(`${base}/locations/cities`, {
+          params: { countryCode },
+        });
 
         const data = Array.isArray(res.data?.data)
           ? res.data.data
@@ -77,17 +73,17 @@ export default function CitySelect({
     return () => {
       mounted = false;
     };
-  }, [countryCode, stateCode, base]);
+  }, [countryCode, base]);
 
   /* ============================================================
-     SYNC EXTERNAL VALUE
+     SYNC VALUE FROM PARENT
   ============================================================ */
   useEffect(() => {
     setInput(value || "");
   }, [value]);
 
   /* ============================================================
-     INPUT CHANGE
+     HANDLE INPUT
   ============================================================ */
   const handleInput = (v) => {
     if (!locationRegex.test(v)) return;
@@ -101,31 +97,34 @@ export default function CitySelect({
   ============================================================ */
   return (
     <div style={{ width: "100%" }}>
-      {/* TEXT INPUT */}
+      {/* CITY INPUT */}
       <input
         type="text"
+        id="city"
+        name="city"
         value={input}
         placeholder={placeholder}
-        disabled={disabled || !stateCode}
+        disabled={disabled}
         onChange={(e) => handleInput(e.target.value)}
         style={{
           ...styles.input,
           ...style,
-          marginBottom: 6,
+          marginBottom: cities.length ? 6 : 0,
         }}
         className={className}
       />
 
-      {/* DROPDOWN (SUGGESTIONS) */}
-      {cities.length > 0 && stateCode && (
+      {/* CITY SUGGESTIONS (OPTIONAL) */}
+      {cities.length > 0 && (
         <select
           value=""
           disabled={disabled || loading}
           onChange={(e) => handleInput(e.target.value)}
           style={styles.select}
+          name="city_suggestions"
         >
           <option value="">
-            {loading ? "Loading cities…" : "Select from existing cities"}
+            {loading ? "Loading cities…" : "Select existing city"}
           </option>
 
           {cities.map((c) => (
