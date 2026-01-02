@@ -24,7 +24,7 @@ export default function VillageSelect({
   className = "",
   style = {},
   disabled = false,
-  mode = "input", // 🔥 NEW: "input" | "select"
+  mode = "input",
 }) {
   const [villages, setVillages] = useState([]);
   const [input, setInput] = useState(value || "");
@@ -35,12 +35,13 @@ export default function VillageSelect({
     "https://backend-7752.onrender.com/api/v1";
 
   /* ============================================================
-     LOAD VILLAGES (backend)
+     LOAD VILLAGES (BACKEND)
+     ⚠️ backend needs countryCode + stateCode + cityName
   ============================================================ */
   useEffect(() => {
     let mounted = true;
 
-    if (!countryCode || !cityName) {
+    if (!countryCode || !stateCode || !cityName) {
       setVillages([]);
       return;
     }
@@ -86,7 +87,7 @@ export default function VillageSelect({
   }, [value]);
 
   /* ============================================================
-     HANDLE INPUT
+     HANDLE INPUT (CREATE / EDIT)
   ============================================================ */
   const handleInput = (v) => {
     if (!locationRegex.test(v)) return;
@@ -119,7 +120,7 @@ export default function VillageSelect({
             className={className}
           />
 
-          {villages.length > 0 && cityName && (
+          {villages.length > 0 && (
             <select
               value=""
               disabled={disabled || loading}
@@ -143,14 +144,16 @@ export default function VillageSelect({
         </>
       )}
 
-      {/* ================= SELECT MODE ================= */}
+      {/* ================= SELECT MODE (MAIN PAGE) ================= */}
       {mode === "select" && (
         <select
           id="village"
           name="village"
           value={value || ""}
           onChange={(e) => onChange?.(e.target.value)}
-          disabled={disabled || loading || !cityName}
+          disabled={
+            disabled || loading || !countryCode || !stateCode || !cityName
+          }
           style={{
             ...styles.select,
             ...style,

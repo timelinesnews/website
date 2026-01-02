@@ -24,12 +24,12 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState("All");
 
   const [country, setCountry] = useState("");
-  const [stateCode, setStateCode] = useState("");
-  const [cityName, setCityName] = useState("");
+  const [state, setState] = useState("");
+  const [city, setCity] = useState("");
   const [village, setVillage] = useState("");
   const [detecting, setDetecting] = useState(false);
 
-  const fetchedOnce = useRef(false); // 🔑 prevent spam
+  const fetchedOnce = useRef(false);
 
   /* ========================= LOAD SAVED LOCATION ========================= */
   useEffect(() => {
@@ -37,8 +37,8 @@ export default function Home() {
     try {
       const saved = JSON.parse(localStorage.getItem("tl_location") || "{}");
       setCountry(saved.country || "");
-      setStateCode(saved.state || "");
-      setCityName(saved.city || "");
+      setState(saved.state || "");
+      setCity(saved.city || "");
       setVillage(saved.village || "");
     } catch { }
   }, []);
@@ -50,16 +50,15 @@ export default function Home() {
       "tl_location",
       JSON.stringify({
         country,
-        state: stateCode,
-        city: cityName,
+        state,
+        city,
         village,
       })
     );
-  }, [country, stateCode, cityName, village]);
+  }, [country, state, city, village]);
 
-  /* ========================= LOAD NEWS (RATE-LIMIT SAFE) ========================= */
+  /* ========================= LOAD NEWS ========================= */
   const loadNews = useCallback(async () => {
-    // 🔁 already fetched → use cache
     if (fetchedOnce.current) {
       try {
         const cached = JSON.parse(localStorage.getItem("tl_news") || "[]");
@@ -72,20 +71,15 @@ export default function Home() {
     setLoading(true);
     try {
       const list = await api.getNews();
+      const valid = Array.isArray(list)
+        ? list.filter((n) => n && n._id)
+        : [];
 
-      if (!Array.isArray(list) || list.length === 0) {
-        setNews([]);
-        setLoading(false);
-        return;
-      }
-
-      const sorted = list
-        .filter((n) => n && n._id)
-        .sort(
-          (a, b) =>
-            (b.views || 0) - (a.views || 0) ||
-            new Date(b.createdAt) - new Date(a.createdAt)
-        );
+      const sorted = valid.sort(
+        (a, b) =>
+          (b.views || 0) - (a.views || 0) ||
+          new Date(b.createdAt) - new Date(a.createdAt)
+      );
 
       setNews(sorted);
       localStorage.setItem("tl_news", JSON.stringify(sorted));
@@ -114,9 +108,10 @@ export default function Home() {
       setDetecting(true);
       const res = await fetch("https://ipapi.co/json/");
       const data = await res.json();
+
       setCountry(data.country_code || "");
-      setStateCode(data.region_code || "");
-      setCityName(data.city || "");
+      setState(data.region || "");
+      setCity(data.city || "");
       setVillage("");
     } catch {
       alert("Auto location failed");
@@ -128,23 +123,21 @@ export default function Home() {
   /* ========================= LOCATION FILTER ========================= */
   const locationFiltered = news.filter((item) => {
     if (country && item.location?.country !== country) return false;
-    if (stateCode && item.location?.state !== stateCode) return false;
-    if (cityName && item.location?.city !== cityName) return false;
+    if (state && item.location?.state !== state) return false;
+    if (city && item.location?.city !== city) return false;
     if (village && item.location?.village !== village) return false;
     return true;
   });
 
   /* ========================= CATEGORY FILTER ========================= */
-  const categoryFiltered =
+  const finalNews =
     activeCategory === "All"
       ? locationFiltered
       : locationFiltered.filter(
         (n) =>
-          n.category?.toLowerCase() ===
-          activeCategory.toLowerCase()
+          n.category?.toLowerCase() === activeCategory.toLowerCase()
       );
 
-  const finalNews = categoryFiltered;
   const trendingNews = news.slice(0, 10);
 
   if (loading) {
@@ -177,29 +170,29 @@ export default function Home() {
         <div style={styles.itemBox}>
           <StateSelect
             countryCode={country}
-            value={stateCode}
-            onChange={setStateCode}
+            value={state}
+            onChange={setState}
           />
         </div>
 
         <div style={styles.itemBox}>
           <CitySelect
             countryCode={country}
-            stateCode={stateCode}
-            value={cityName}
-            onChange={setCityName}
+            value={city}
+            onChange={setCity}
+            mode="select"
           />
         </div>
 
-        {cityName && (
+        {city && (
           <div style={styles.itemBox}>
             <VillageSelect
               countryCode={country}
-              stateCode={stateCode}
-              cityName={cityName}
+              stateCode={state}
+              cityName={city}
               value={village}
               onChange={setVillage}
-              disableTyping
+              mode="select"
             />
           </div>
         )}

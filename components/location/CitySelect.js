@@ -16,13 +16,14 @@ const normalize = (t = "") =>
 
 export default function CitySelect({
   countryCode,
+  stateCode,              // 🔥 ADDED (important)
   value,
   onChange,
   placeholder = "Enter City",
   className = "",
   style = {},
   disabled = false,
-  mode = "input", // 🔥 NEW: "input" | "select"
+  mode = "input",
 }) {
   const [cities, setCities] = useState([]);
   const [input, setInput] = useState(value || "");
@@ -33,12 +34,14 @@ export default function CitySelect({
     "https://backend-7752.onrender.com/api/v1";
 
   /* ============================================================
-     LOAD CITIES (OPTIONAL SUGGESTIONS)
+     LOAD CITIES (BACKEND)
+     ⚠️ backend needs countryCode + stateCode
   ============================================================ */
   useEffect(() => {
     let mounted = true;
 
-    if (!countryCode) {
+    // dropdown ke liye stateCode mandatory
+    if (!countryCode || !stateCode) {
       setCities([]);
       return;
     }
@@ -46,9 +49,9 @@ export default function CitySelect({
     async function loadCities() {
       setLoading(true);
       try {
-        const res = await axios.get(`${base}/locations/cities`, {
-          params: { countryCode },
-        });
+        const res = await axios.get(
+          `${base}/locations/cities/${countryCode}/${stateCode}`
+        );
 
         const data = Array.isArray(res.data?.data)
           ? res.data.data
@@ -74,7 +77,7 @@ export default function CitySelect({
     return () => {
       mounted = false;
     };
-  }, [countryCode, base]);
+  }, [countryCode, stateCode, base]);
 
   /* ============================================================
      SYNC VALUE FROM PARENT
@@ -84,7 +87,7 @@ export default function CitySelect({
   }, [value]);
 
   /* ============================================================
-     HANDLE INPUT
+     HANDLE INPUT (CREATE PAGE)
   ============================================================ */
   const handleInput = (v) => {
     if (!locationRegex.test(v)) return;
@@ -139,14 +142,14 @@ export default function CitySelect({
         </>
       )}
 
-      {/* ================= SELECT MODE ================= */}
+      {/* ================= SELECT MODE (MAIN PAGE) ================= */}
       {mode === "select" && (
         <select
           id="city"
           name="city"
           value={value || ""}
           onChange={(e) => onChange?.(e.target.value)}
-          disabled={disabled || loading || !countryCode}
+          disabled={disabled || loading || !countryCode || !stateCode}
           style={{
             ...styles.select,
             ...style,
