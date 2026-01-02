@@ -4,11 +4,8 @@ import Head from "next/head";
 import { api, getAuthToken } from "../services/api";
 import { useRouter } from "next/router";
 
-// Location Components
+// Location
 import CountrySelect from "../components/location/CountrySelect";
-import StateSelect from "../components/location/StateSelect";
-import CitySelect from "../components/location/CitySelect";
-import VillageSelect from "../components/location/VillageSelect";
 
 export default function Create() {
   const router = useRouter();
@@ -44,7 +41,12 @@ export default function Create() {
   ];
 
   /* ===============================
-      AUTH + LOAD PROFILE
+      REGEX (alphabets only)
+  =============================== */
+  const locationRegex = /^[A-Za-z\s]{2,50}$/;
+
+  /* ===============================
+      AUTH
   =============================== */
   useEffect(() => {
     const init = async () => {
@@ -59,9 +61,6 @@ export default function Create() {
         setForm((prev) => ({
           ...prev,
           country: u.country || "",
-          state: u.state || "",
-          city: u.city || "",
-          village: u.village || "",
         }));
       } catch {
         router.replace("/login");
@@ -100,23 +99,12 @@ export default function Create() {
   };
 
   /* ===============================
-      LOCATION CASCADE
+      COUNTRY CHANGE
   =============================== */
   const changeCountry = (v) => {
     updateField("country", v);
     updateField("state", "");
     updateField("city", "");
-    updateField("village", "");
-  };
-
-  const changeState = (v) => {
-    updateField("state", v);
-    updateField("city", "");
-    updateField("village", "");
-  };
-
-  const changeCity = (v) => {
-    updateField("city", v);
     updateField("village", "");
   };
 
@@ -127,13 +115,25 @@ export default function Create() {
     if (!form.headline.trim()) return "Headline is required.";
     if (form.headline.length < 10)
       return "Headline should be at least 10 characters.";
+
     if (!form.content.trim()) return "Content is required.";
     if (form.content.length < 50)
       return "Content should be at least 50 characters.";
+
     if (!form.category) return "Please select a category.";
-    if (!form.country || !form.state || !form.city)
-      return "Country, state and city are required.";
+    if (!form.country) return "Country is required.";
+
+    if (!locationRegex.test(form.state))
+      return "State must contain only alphabets.";
+
+    if (!locationRegex.test(form.city))
+      return "City must contain only alphabets.";
+
+    if (form.village && !locationRegex.test(form.village))
+      return "Village must contain only alphabets.";
+
     if (!image) return "Please upload an image.";
+
     return null;
   };
 
@@ -161,7 +161,7 @@ export default function Create() {
       fd.append("state", form.state);
       fd.append("city", form.city);
       fd.append("village", form.village || "");
-      fd.append("photoUrl", image); // backend expects this key
+      fd.append("photoUrl", image);
 
       const res = await api.createNews(fd);
 
@@ -173,6 +173,9 @@ export default function Create() {
           headline: "",
           content: "",
           category: "",
+          state: "",
+          city: "",
+          village: "",
         }));
 
         setImage(null);
@@ -197,10 +200,6 @@ export default function Create() {
     <>
       <Head>
         <title>Create News | TIMELINES</title>
-        <meta
-          name="description"
-          content="Create and publish local news on TIMELINES."
-        />
       </Head>
 
       <div style={styles.page}>
@@ -213,7 +212,6 @@ export default function Create() {
               value={form.headline}
               onChange={(e) => updateField("headline", e.target.value)}
               style={styles.input}
-              required
             />
 
             <textarea
@@ -221,14 +219,12 @@ export default function Create() {
               value={form.content}
               onChange={(e) => updateField("content", e.target.value)}
               style={{ ...styles.input, minHeight: 120 }}
-              required
             />
 
             <select
               value={form.category}
               onChange={(e) => updateField("category", e.target.value)}
               style={styles.input}
-              required
             >
               <option value="">Select Category</option>
               {categories.map((c) => (
@@ -238,58 +234,54 @@ export default function Create() {
 
             {/* LOCATION */}
             <CountrySelect value={form.country} onChange={changeCountry} />
-            <StateSelect
-              countryCode={form.country}
+
+            <input
+              placeholder="Enter State"
               value={form.state}
-              onChange={changeState}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "" || locationRegex.test(v)) {
+                  updateField("state", v);
+                }
+              }}
+              style={styles.input}
             />
-            <CitySelect
-              countryCode={form.country}
-              stateCode={form.state}
+
+            <input
+              placeholder="Enter City"
               value={form.city}
-              onChange={changeCity}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "" || locationRegex.test(v)) {
+                  updateField("city", v);
+                }
+              }}
+              style={styles.input}
             />
-            <VillageSelect
-              countryCode={form.country}
-              stateCode={form.state}
-              cityName={form.city}
+
+            <input
+              placeholder="Enter Village (optional)"
               value={form.village}
-              onChange={(v) => updateField("village", v)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "" || locationRegex.test(v)) {
+                  updateField("village", v);
+                }
+              }}
+              style={styles.input}
             />
 
             {/* IMAGE */}
-            <div>
-              <input type="file" accept="image/*" onChange={handleImage} />
-              {preview && (
-                <img
-                  src={preview}
-                  style={styles.preview}
-                  alt="preview"
-                />
-              )}
-            </div>
+            <input type="file" accept="image/*" onChange={handleImage} />
+            {preview && <img src={preview} style={styles.preview} />}
 
-            <button
-              disabled={isLoading}
-              style={{
-                ...styles.btn,
-                opacity: isLoading ? 0.7 : 1,
-              }}
-            >
+            <button disabled={isLoading} style={styles.btn}>
               {isLoading ? "Posting…" : "🚀 Post News"}
             </button>
           </form>
 
           {msg && (
-            <div
-              style={{
-                marginTop: 12,
-                color: msg.includes("success") ? "green" : "red",
-                fontWeight: 600,
-              }}
-            >
-              {msg}
-            </div>
+            <div style={{ marginTop: 12, fontWeight: 600 }}>{msg}</div>
           )}
         </div>
       </div>
@@ -305,46 +297,35 @@ const styles = {
     minHeight: "100vh",
     background: "#f5f7fb",
     padding: 20,
-    fontFamily: "Inter, sans-serif",
   },
-
   card: {
     background: "#fff",
     padding: 25,
     borderRadius: 18,
     maxWidth: 720,
     margin: "0 auto",
-    boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
   },
-
   title: {
     fontSize: 26,
     fontWeight: 800,
     marginBottom: 20,
   },
-
   form: {
     display: "flex",
     flexDirection: "column",
     gap: 15,
   },
-
   input: {
     padding: 12,
     borderRadius: 12,
     border: "1px solid #d3d8e5",
     fontSize: 16,
-    background: "#fff",
-    outline: "none",
   },
-
   preview: {
     width: "100%",
     marginTop: 12,
     borderRadius: 12,
-    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
   },
-
   btn: {
     padding: 14,
     fontSize: 16,
