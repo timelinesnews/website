@@ -3,10 +3,10 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 /* ============================================================
-   VillageSelect (Dropdown + Type)
-   - Shows existing villages (backend)
-   - Allows typing new village
-   - Alphabets only
+   VillageSelect (HYBRID)
+   - mode="input"  → typing + suggestions (Create/Edit page)
+   - mode="select" → dropdown only (Main page)
+   - DEFAULT = input
 ============================================================ */
 
 const locationRegex = /^[A-Za-z\s]{0,50}$/;
@@ -20,10 +20,11 @@ export default function VillageSelect({
   cityName,
   value,
   onChange,
-  placeholder = "Enter or Select Village",
+  placeholder = "Enter Village",
   className = "",
   style = {},
   disabled = false,
+  mode = "input", // 🔥 NEW: "input" | "select"
 }) {
   const [villages, setVillages] = useState([]);
   const [input, setInput] = useState(value || "");
@@ -39,7 +40,7 @@ export default function VillageSelect({
   useEffect(() => {
     let mounted = true;
 
-    if (!countryCode || !stateCode || !cityName) {
+    if (!countryCode || !cityName) {
       setVillages([]);
       return;
     }
@@ -47,12 +48,9 @@ export default function VillageSelect({
     async function loadVillages() {
       setLoading(true);
       try {
-        const res = await axios.get(
-          `${base}/locations/villages`,
-          {
-            params: { countryCode, stateCode, cityName },
-          }
-        );
+        const res = await axios.get(`${base}/locations/villages`, {
+          params: { countryCode, stateCode, cityName },
+        });
 
         const data = Array.isArray(res.data?.data)
           ? res.data.data
@@ -81,14 +79,14 @@ export default function VillageSelect({
   }, [countryCode, stateCode, cityName, base]);
 
   /* ============================================================
-     SYNC EXTERNAL VALUE
+     SYNC VALUE FROM PARENT
   ============================================================ */
   useEffect(() => {
     setInput(value || "");
   }, [value]);
 
   /* ============================================================
-     INPUT CHANGE
+     HANDLE INPUT
   ============================================================ */
   const handleInput = (v) => {
     if (!locationRegex.test(v)) return;
@@ -102,31 +100,66 @@ export default function VillageSelect({
   ============================================================ */
   return (
     <div style={{ width: "100%" }}>
-      {/* TEXT INPUT */}
-      <input
-        type="text"
-        value={input}
-        placeholder={placeholder}
-        disabled={disabled || !cityName}
-        onChange={(e) => handleInput(e.target.value)}
-        style={{
-          ...styles.input,
-          ...style,
-          marginBottom: 6,
-        }}
-        className={className}
-      />
+      {/* ================= INPUT MODE ================= */}
+      {mode === "input" && (
+        <>
+          <input
+            type="text"
+            id="village"
+            name="village"
+            value={input}
+            placeholder={placeholder}
+            disabled={disabled || !cityName}
+            onChange={(e) => handleInput(e.target.value)}
+            style={{
+              ...styles.input,
+              ...style,
+              marginBottom: villages.length ? 6 : 0,
+            }}
+            className={className}
+          />
 
-      {/* DROPDOWN (SUGGESTIONS) */}
-      {villages.length > 0 && cityName && (
+          {villages.length > 0 && cityName && (
+            <select
+              value=""
+              disabled={disabled || loading}
+              onChange={(e) => handleInput(e.target.value)}
+              style={styles.select}
+              name="village_suggestions"
+            >
+              <option value="">
+                {loading
+                  ? "Loading villages…"
+                  : "Select existing village"}
+              </option>
+
+              {villages.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          )}
+        </>
+      )}
+
+      {/* ================= SELECT MODE ================= */}
+      {mode === "select" && (
         <select
-          value=""
-          disabled={disabled || loading}
-          onChange={(e) => handleInput(e.target.value)}
-          style={styles.select}
+          id="village"
+          name="village"
+          value={value || ""}
+          onChange={(e) => onChange?.(e.target.value)}
+          disabled={disabled || loading || !cityName}
+          style={{
+            ...styles.select,
+            ...style,
+            backgroundColor: loading ? "#f8fafc" : "#fff",
+          }}
+          className={className}
         >
           <option value="">
-            {loading ? "Loading villages…" : "Select from existing villages"}
+            {loading ? "Loading villages…" : "Select Village"}
           </option>
 
           {villages.map((v) => (

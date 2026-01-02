@@ -3,9 +3,10 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 /* ============================================================
-   CitySelect (Type + Optional Dropdown)
-   - City manually type ho sakdi aa
-   - Existing cities backend ton suggest hon
+   CitySelect (HYBRID)
+   - mode="input"   → typing + suggestions (Create page)
+   - mode="select"  → dropdown only (Main page)
+   - DEFAULT = input
 ============================================================ */
 
 const locationRegex = /^[A-Za-z\s]{0,50}$/;
@@ -21,6 +22,7 @@ export default function CitySelect({
   className = "",
   style = {},
   disabled = false,
+  mode = "input", // 🔥 NEW: "input" | "select"
 }) {
   const [cities, setCities] = useState([]);
   const [input, setInput] = useState(value || "");
@@ -32,7 +34,6 @@ export default function CitySelect({
 
   /* ============================================================
      LOAD CITIES (OPTIONAL SUGGESTIONS)
-     🔥 stateCode dependency removed
   ============================================================ */
   useEffect(() => {
     let mounted = true;
@@ -97,34 +98,64 @@ export default function CitySelect({
   ============================================================ */
   return (
     <div style={{ width: "100%" }}>
-      {/* CITY INPUT */}
-      <input
-        type="text"
-        id="city"
-        name="city"
-        value={input}
-        placeholder={placeholder}
-        disabled={disabled}
-        onChange={(e) => handleInput(e.target.value)}
-        style={{
-          ...styles.input,
-          ...style,
-          marginBottom: cities.length ? 6 : 0,
-        }}
-        className={className}
-      />
+      {/* ================= INPUT MODE ================= */}
+      {mode === "input" && (
+        <>
+          <input
+            type="text"
+            id="city"
+            name="city"
+            value={input}
+            placeholder={placeholder}
+            disabled={disabled}
+            onChange={(e) => handleInput(e.target.value)}
+            style={{
+              ...styles.input,
+              ...style,
+              marginBottom: cities.length ? 6 : 0,
+            }}
+            className={className}
+          />
 
-      {/* CITY SUGGESTIONS (OPTIONAL) */}
-      {cities.length > 0 && (
+          {cities.length > 0 && (
+            <select
+              value=""
+              disabled={disabled || loading}
+              onChange={(e) => handleInput(e.target.value)}
+              style={styles.select}
+              name="city_suggestions"
+            >
+              <option value="">
+                {loading ? "Loading cities…" : "Select existing city"}
+              </option>
+
+              {cities.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          )}
+        </>
+      )}
+
+      {/* ================= SELECT MODE ================= */}
+      {mode === "select" && (
         <select
-          value=""
-          disabled={disabled || loading}
-          onChange={(e) => handleInput(e.target.value)}
-          style={styles.select}
-          name="city_suggestions"
+          id="city"
+          name="city"
+          value={value || ""}
+          onChange={(e) => onChange?.(e.target.value)}
+          disabled={disabled || loading || !countryCode}
+          style={{
+            ...styles.select,
+            ...style,
+            backgroundColor: loading ? "#f8fafc" : "#fff",
+          }}
+          className={className}
         >
           <option value="">
-            {loading ? "Loading cities…" : "Select existing city"}
+            {loading ? "Loading cities…" : "Select City"}
           </option>
 
           {cities.map((c) => (
