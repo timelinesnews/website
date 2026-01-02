@@ -2,137 +2,72 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-/* ============================================================================
-   🇮🇳 PUNJAB FALLBACK (ONLY IF BACKEND FAILS)
-============================================================================ */
-const PUNJAB_CITIES = [
-  "Ludhiana",
-  "Amritsar",
-  "Jalandhar",
-  "Patiala",
-  "Bathinda",
-  "Mohali",
-  "Hoshiarpur",
-  "Moga",
-  "Firozpur",
-  "Fatehgarh Sahib",
-  "Barnala",
-  "Mansa",
-  "Kapurthala",
-  "Sangrur",
-  "Faridkot",
-  "Gurdaspur",
-  "Pathankot",
-  "Rupnagar",
-  "Muktsar",
-  "Tarn Taran",
-];
+/* ============================================================
+   CitySelect (Dropdown + Type)
+   - Shows existing cities
+   - Allows typing new city
+   - Alphabets only
+============================================================ */
 
-const fallbackPunjab = PUNJAB_CITIES.map((name) => ({ name }));
+const locationRegex = /^[A-Za-z\s]{0,50}$/;
+
+const normalize = (t = "") =>
+  t.replace(/\s+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function CitySelect({
   countryCode,
   stateCode,
   value,
   onChange,
-  placeholder = "Select City",
+  placeholder = "Enter or Select City",
   className = "",
   style = {},
   disabled = false,
 }) {
   const [cities, setCities] = useState([]);
+  const [input, setInput] = useState(value || "");
   const [loading, setLoading] = useState(false);
 
   const base =
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     "https://backend-7752.onrender.com/api/v1";
 
-  const CACHE_KEY = `tl_cities_${countryCode}_${stateCode}`;
-
-  /* ============================================================================
-     LOAD CITIES ON COUNTRY / STATE CHANGE
-     - Session cache
-     - Backend fetch
-     - Punjab fallback
-  ============================================================================ */
+  /* ============================================================
+     LOAD CITIES (backend)
+  ============================================================ */
   useEffect(() => {
     let mounted = true;
 
     if (!countryCode || !stateCode) {
       setCities([]);
-      onChange?.("");
       return;
     }
 
     async function loadCities() {
       setLoading(true);
-
-      /* -----------------------------
-         1️⃣ CACHE (SESSION)
-      ----------------------------- */
-      try {
-        const cached = sessionStorage.getItem(CACHE_KEY);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (mounted) setCities(parsed);
-          setLoading(false);
-          return;
-        }
-      } catch {
-        /* ignore cache errors */
-      }
-
-      /* -----------------------------
-         2️⃣ BACKEND
-      ----------------------------- */
       try {
         const res = await axios.get(
-          `${base}/locations/cities/${countryCode}/${stateCode}`
+          `${base}/locations/cities`,
+          {
+            params: { countryCode, stateCode },
+          }
         );
 
-        let data = res.data?.data || res.data || [];
-        if (!Array.isArray(data)) data = [];
-
-        const normalized = data
-          .map((c) => ({
-            name:
-              c.name ||
-              c.city ||
-              c.label ||
-              c.district ||
-              c.value ||
-              "",
-          }))
-          .filter((c) => c.name)
-          .sort((a, b) => a.name.localeCompare(b.name));
-
-        // Punjab fallback if backend empty
-        const finalData =
-          normalized.length === 0 &&
-          stateCode.toUpperCase() === "PB"
-            ? fallbackPunjab
-            : normalized;
-
-        if (mounted) setCities(finalData);
-
-        try {
-          sessionStorage.setItem(
-            CACHE_KEY,
-            JSON.stringify(finalData)
-          );
-        } catch {
-          /* ignore cache errors */
-        }
-      } catch (err) {
-        console.error("❌ CitySelect error:", err);
+        const data = Array.isArray(res.data?.data)
+          ? res.data.data
+          : [];
 
         if (mounted) {
           setCities(
-            stateCode.toUpperCase() === "PB"
-              ? fallbackPunjab
-              : []
+            data
+              .map((c) => c.name)
+              .filter(Boolean)
+              .sort((a, b) => a.localeCompare(b))
           );
         }
+      } catch (err) {
+        console.error("❌ CitySelect load error:", err);
+        if (mounted) setCities([]);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -142,48 +77,87 @@ export default function CitySelect({
     return () => {
       mounted = false;
     };
-  }, [countryCode, stateCode, base, onChange]);
+  }, [countryCode, stateCode, base]);
 
-  /* ============================================================================
+  /* ============================================================
+     SYNC EXTERNAL VALUE
+  ============================================================ */
+  useEffect(() => {
+    setInput(value || "");
+  }, [value]);
+
+  /* ============================================================
+     INPUT CHANGE
+  ============================================================ */
+  const handleInput = (v) => {
+    if (!locationRegex.test(v)) return;
+
+    setInput(v);
+    onChange?.(normalize(v));
+  };
+
+  /* ============================================================
      UI
-  ============================================================================ */
+  ============================================================ */
   return (
-    <select
-      value={value || ""}
-      onChange={(e) => onChange?.(e.target.value)}
-      disabled={!stateCode || loading || disabled}
-      className={className}
-      style={{
-        ...styles.select,
-        ...style,
-        backgroundColor: loading ? "#f8fafc" : "#fff",
-      }}
-    >
-      <option value="">
-        {loading ? "Loading cities…" : placeholder}
-      </option>
+    <div style={{ width: "100%" }}>
+      {/* TEXT INPUT */}
+      <input
+        type="text"
+        value={input}
+        placeholder={placeholder}
+        disabled={disabled || !stateCode}
+        onChange={(e) => handleInput(e.target.value)}
+        style={{
+          ...styles.input,
+          ...style,
+          marginBottom: 6,
+        }}
+        className={className}
+      />
 
-      {cities.map((c, idx) => (
-        <option key={`${c.name}-${idx}`} value={c.name}>
-          {c.name}
-        </option>
-      ))}
-    </select>
+      {/* DROPDOWN (SUGGESTIONS) */}
+      {cities.length > 0 && stateCode && (
+        <select
+          value=""
+          disabled={disabled || loading}
+          onChange={(e) => handleInput(e.target.value)}
+          style={styles.select}
+        >
+          <option value="">
+            {loading ? "Loading cities…" : "Select from existing cities"}
+          </option>
+
+          {cities.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
   );
 }
 
-/* ============================================================================
+/* ============================================================
    STYLES
-============================================================================ */
+============================================================ */
 const styles = {
-  select: {
+  input: {
     padding: "12px 14px",
     borderRadius: 12,
     border: "1px solid #e5e7eb",
     width: "100%",
     fontSize: 15,
-    cursor: "pointer",
     outline: "none",
-    transition: "border 0.15s ease",
+  },
+  select: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid #e5e7eb",
+    width: "100%",
+    fontSize: 14,
+    background: "#fafafa",
+    cursor: "pointer",
   },
 };
